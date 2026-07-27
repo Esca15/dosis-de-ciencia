@@ -18,7 +18,7 @@ dia_actual = datetime.datetime.now().weekday()
 
 if dia_actual == 0:
     termino_busqueda = "biostatistics health research systematic review"
-    etiqueta_tema = "Biadestadística y Análisis de Datos"
+    etiqueta_tema = "Bioestadística y Análisis de Datos"
 elif dia_actual == 2:
     termino_busqueda = "dental public health clinical trials systematic review"
     etiqueta_tema = "Salud y Odontología Basada en Evidencia"
@@ -66,14 +66,15 @@ if info_articulo:
     titulo_art = info_articulo["titulo_articulo"]
 else:
     REFERENCIA_VANCOUVER = "Bermeo-Eskandani JR, et al. Evidencia científica automatizada en salud. Rev Med. 2026; PMID: 00000000."
-    titulo_art = "Evidencia científica en salud"
+    titulo_art = "Evidencia científica en salud y metodología clínica"
 
-# Diccionario dinámico con base en el hallazgo
+# Diccionario dinámico adaptado y redactado formalmente en español
 datos_infografia = {
-    "titulo_red": f"¡Nueva #DosisDeCiencia sobre {etiqueta_tema}!",
-    "problema": f"En el análisis actual enfocado en '{titulo_art}', la variabilidad metodológica y clínica exige examinar la evidencia más reciente.",
-    "hallazgo_principal": f"La revisión sistemática identifica parámetros críticos asociados a {etiqueta_tema.lower()}, demostrando un impacto estadísticamente significativo.",
-    "conclusion": "Integrar estos hallazgos optimiza la toma de decisiones clínicas y fortalece el rigor en la investigación científica."
+    "titulo_principal": f"Evidencia Actual en {etiqueta_tema}",
+    "subtitulo_destacado": f"Análisis basado en: {titulo_art[:110]}...",
+    "problema": f"En la práctica clínica y de investigación actual enfocada en {etiqueta_tema.lower()}, la variabilidad metodológica exige examinar rigurosamente la literatura más reciente.",
+    "hallazgo_principal": f"La revisión sistemática identifica parámetros críticos y asociaciones metodológicas con un impacto estadísticamente significativo sobre el campo de estudio.",
+    "conclusion": "La correcta integración de estos hallazgos optimiza la toma de decisiones profesionales y fortalece el rigor científico institucional."
 }
 
 print("3. Renderizando infografía gráfica...")
@@ -97,9 +98,9 @@ if not os.path.exists(font_path_bold):
     font_path_reg = "/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf"
 
 fuente_cabecera = ImageFont.truetype(font_path_bold, 28)
-fuente_titulo = ImageFont.truetype(font_path_bold, 36)
-fuente_subtitulo = ImageFont.truetype(font_path_bold, 24)
-fuente_cuerpo = ImageFont.truetype(font_path_reg, 21)
+fuente_titulo = ImageFont.truetype(font_path_bold, 30)
+fuente_subtitulo = ImageFont.truetype(font_path_bold, 22)
+fuente_cuerpo = ImageFont.truetype(font_path_reg, 20)
 fuente_pie = ImageFont.truetype(font_path_reg, 18)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 14)
 fuente_ref_reg = ImageFont.truetype(font_path_reg, 14)
@@ -146,7 +147,7 @@ def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=
         y_offset += line_height + line_spacing
     return y_offset
 
-# Dibujar elementos gráficos
+# Dibujar elementos gráficos de cabecera
 draw.rectangle([(0, 0), (ANCHO, 105)], fill="#FFFFFF")
 draw.text((MARGEN_LATERAL, 35), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
 w_dosis = draw.textlength("DOSIS DE CIENCIA", font=fuente_cabecera)
@@ -168,17 +169,21 @@ try:
 except IOError:
     pass
 
-y_actual = 135
-titulo_wrapped = textwrap.wrap(datos_infografia["titulo_red"], width=46)
-altura_titulo = len(titulo_wrapped) * 40 + 35
-draw.rounded_rectangle([(MARGEN_LATERAL, y_actual), (ANCHO - MARGEN_LATERAL, y_actual + altura_titulo)], radius=15, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
-draw.multiline_text((MARGEN_LATERAL + 20, y_actual + 18), "\n".join(titulo_wrapped), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=6)
+y_actual = 130
+titulo_wrapped = textwrap.wrap(datos_infografia["titulo_principal"], width=48)
+sub_wrapped = textwrap.wrap(datos_infografia["subtitulo_destacado"], width=62)
+altura_titulo = (len(titulo_wrapped) * 34) + (len(sub_wrapped) * 26) + 30
 
-y_actual += altura_titulo + 32
+draw.rounded_rectangle([(MARGEN_LATERAL, y_actual), (ANCHO - MARGEN_LATERAL, y_actual + altura_titulo)], radius=15, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
+draw.multiline_text((MARGEN_LATERAL + 20, y_actual + 15), "\n".join(titulo_wrapped), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
+y_sub_pos = y_actual + 15 + (len(titulo_wrapped) * 34) + 6
+draw.multiline_text((MARGEN_LATERAL + 20, y_sub_pos), "\n".join(sub_wrapped), fill="#4B5563", font=fuente_subtitulo, spacing=4)
+
+y_actual += altura_titulo + 28
 draw.text((MARGEN_LATERAL, y_actual), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo)
-y_actual += 36
-y_actual = draw_justified_text(draw, datos_infografia["problema"], MARGEN_LATERAL, y_actual, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=8)
-y_actual += 24
+y_actual += 32
+y_actual = draw_justified_text(draw, datos_infografia["problema"], MARGEN_LATERAL, y_actual, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=6)
+y_actual += 18
 
 y_hallazgo_inicio = y_actual
 ancho_caja_util = ANCHO_UTIL - 40
@@ -196,27 +201,27 @@ if linea_temp:
 
 bbox = fuente_cuerpo.getbbox("A")
 lh_cuerpo = bbox[3] - bbox[1]
-altura_texto_h = len(lineas_h) * (lh_cuerpo + 8)
-altura_caja_total = altura_texto_h + 70
+altura_texto_h = len(lineas_h) * (lh_cuerpo + 6)
+altura_caja_total = altura_texto_h + 60
 
 draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_inicio), (ANCHO - MARGEN_LATERAL, y_hallazgo_inicio + altura_caja_total)], radius=15, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
-draw.text((MARGEN_LATERAL + 20, y_hallazgo_inicio + 16), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo)
-y_text_h = y_hallazgo_inicio + 52
-draw_justified_text(draw, datos_infografia["hallazgo_principal"], MARGEN_LATERAL + 20, y_text_h, ancho_caja_util, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=8)
+draw.text((MARGEN_LATERAL + 20, y_hallazgo_inicio + 14), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo)
+y_text_h = y_hallazgo_inicio + 46
+draw_justified_text(draw, datos_infografia["hallazgo_principal"], MARGEN_LATERAL + 20, y_text_h, ancho_caja_util, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=6)
 
-y_actual = y_hallazgo_inicio + altura_caja_total + 32
+y_actual = y_hallazgo_inicio + altura_caja_total + 26
 draw.text((MARGEN_LATERAL, y_actual), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo)
-y_actual += 36
-y_actual = draw_justified_text(draw, datos_infografia["conclusion"], MARGEN_LATERAL, y_actual, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=8)
-y_actual += 24
+y_actual += 32
+y_actual = draw_justified_text(draw, datos_infografia["conclusion"], MARGEN_LATERAL, y_actual, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=6)
+y_actual += 16
 
 draw.line([(MARGEN_LATERAL, y_actual), (ANCHO - MARGEN_LATERAL, y_actual)], fill="#E5E7EB", width=1)
-y_actual += 12
+y_actual += 10
 draw.text((MARGEN_LATERAL, y_actual), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
-y_actual += 24
+y_actual += 20
 
 lineas_referencia = textwrap.wrap(REFERENCIA_VANCOUVER, width=95)
-draw.multiline_text((MARGEN_LATERAL, y_actual), "\n".join(lineas_referencia), fill="#4B5563", font=fuente_ref_reg, spacing=4)
+draw.multiline_text((MARGEN_LATERAL, y_actual), "\n".join(lineas_referencia), fill="#4B5563", font=fuente_ref_reg, spacing=3)
 
 draw.rectangle([(0, ALTO - 55), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
 draw.text((MARGEN_LATERAL, ALTO - 35), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
@@ -234,11 +239,11 @@ print("Infografía generada con éxito.")
 print("Enviando correo electrónico...")
 remitente = os.environ.get("CORREO_DESTINO")
 contrasena = os.environ.get("CONTRASENA_APP")
-destinatario = remitente # Se manda a tu mismo correo
+destinatario = remitente 
 
 copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 
-🔍 EL PROBLEMA:
+🔍 PROBLEMA CLÍNICO:
 {datos_infografia['problema']}
 
 💡 HALLAZGO PRINCIPAL:
@@ -250,23 +255,20 @@ copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 📚 Referencia científica (PubMed): 
 {REFERENCIA_VANCOUVER}
 
-#Ciencia #Investigación #UAEMex #MedicinaBasadaEnEvidencia #Salud
+#Ciencia #Investigación #UAEMex #Bioestadística #SaludBasadaEnEvidencia #Odontología
 """
 
 msg = EmailMessage()
 msg['Subject'] = f"🧬 Dosis de Ciencia lista ({etiqueta_tema})"
 msg['From'] = remitente
 msg['To'] = destinatario
-msg.set_content(f"Aquí tienes tu infografía y el texto listo para copiar y pegar en tus redes:\n\n{copy_redes}")
+msg.set_content(f"Aquí tienes tu infografía actualizada y el texto listo para tus redes:\n\n{copy_redes}")
 
-# Adjuntar la imagen generada
 with open("main.png", "rb") as f:
     file_data = f.read()
-    file_name = f.getname() if hasattr(f, 'getname') else "infografia_dosis_ciencia.png"
 
 msg.add_attachment(file_data, maintype='image', subtype='png', filename="infografia_dosis_ciencia.png")
 
-# Conectar al servidor de Gmail y enviar
 try:
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(remitente, contrasena)
