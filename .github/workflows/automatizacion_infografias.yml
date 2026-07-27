@@ -2,7 +2,6 @@ name: Automatizar Dosis de Ciencia
 
 on:
   schedule:
-    # Se ejecuta a las 8:00 AM (UTC) los lunes (1), miércoles (3) y viernes (5)
     - cron: '0 8 * * 1,3,5'
   
   workflow_dispatch:
@@ -10,6 +9,10 @@ on:
 jobs:
   generar-infografia:
     runs-on: ubuntu-latest
+    
+    env:
+      CORREO_DESTINO: ${{ secrets.CORREO_DESTINO }}
+      CONTRASENA_APP: ${{ secrets.CONTRASENA_APP }}
     
     steps:
     - name: Clonar repositorio
@@ -20,11 +23,11 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Instalar dependencias del sistema y Python
+    - name: Instalar dependencias
       run: |
         sudo apt-get update
         sudo apt-get install -y fonts-roboto
         pip install Pillow requests
 
-    - name: Ejecutar generador de infografías
+    - name: Ejecutar generador y envío de correo
       run: python main.py
