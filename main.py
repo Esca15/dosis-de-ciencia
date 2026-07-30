@@ -45,13 +45,33 @@ def traducir_y_adaptar(texto):
         print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
         return texto
 
-def obtener_oraciones_completas(texto, max_oraciones=2):
-    # Separar correctamente por puntos seguidos de espacio/mayúscula
+# --- FUNCIÓN DINÁMICA DE EXTRACCIÓN POR LÍMITE DE CARACTERES ---
+def obtener_oraciones_completas(texto, max_caracteres=420):
+    """
+    Extrae tantas oraciones completas como sea posible dentro del límite de caracteres.
+    Esto permite capturar entre 4 y 6 oraciones en la sección de resultados sin romper el diseño.
+    """
+    if not texto:
+        return ""
+        
+    # Separar por puntos seguidos de espacio
     oraciones = re.split(r'\.\s+', texto)
     oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 15]
     
-    # Tomar las primeras N oraciones completas
-    seleccion = ". ".join(oraciones_validas[:max_oraciones])
+    resultado = []
+    longitud_acumulada = 0
+    
+    for oracion in oraciones_validas:
+        if longitud_acumulada + len(oracion) <= max_caracteres:
+            resultado.append(oracion)
+            longitud_acumulada += len(oracion)
+        else:
+            # Si la primera oración es muy larga, la incluimos para no dejar vacía la sección
+            if not resultado:
+                resultado.append(oracion)
+            break
+            
+    seleccion = ". ".join(resultado)
     if seleccion and not seleccion.endswith('.'):
         seleccion += '.'
     return seleccion
@@ -144,20 +164,22 @@ if estudio:
     # Extractos por sección
     prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
     if not prob_text:
-        prob_text = obtener_oraciones_completas(abs_full, max_oraciones=1)
+        prob_text = abs_full
 
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     if not hall_text:
-        hall_text = obtener_oraciones_completas(abs_full, max_oraciones=2)
+        hall_text = abs_full
 
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
     if not conc_text:
-        conc_text = obtener_oraciones_completas(abs_full, max_oraciones=1)
+        conc_text = abs_full
 
-    # Extraer oraciones sintácticas completas
-    prob_clean = obtener_oraciones_completas(prob_text, max_oraciones=2)
-    hall_clean = obtener_oraciones_completas(hall_text, max_oraciones=2)
-    conc_clean = obtener_oraciones_completas(conc_text, max_oraciones=2)
+    # Extracción adaptativa:
+    # Problema y Conclusión: ~200-220 caracteres
+    # Hallazgo Principal: ~420 caracteres (captura de 4 a 6 oraciones)
+    prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=220)
+    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=420)
+    conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=220)
 
     # Traducir y redactar en 3ra persona
     problema_texto = traducir_y_adaptar(prob_clean)
@@ -192,7 +214,7 @@ fuente_cabecera = ImageFont.truetype(font_path_bold, 28)
 fuente_titulo = ImageFont.truetype(font_path_bold, 22)
 fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 19)
 fuente_subtitulo = ImageFont.truetype(font_path_reg, 16)
-fuente_cuerpo = ImageFont.truetype(font_path_reg, 17)  
+fuente_cuerpo = ImageFont.truetype(font_path_reg, 17)
 fuente_pie = ImageFont.truetype(font_path_reg, 18)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 14)
 fuente_ref_reg = ImageFont.truetype(font_path_reg, 13)
@@ -271,12 +293,12 @@ draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_c
 draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 12), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
 draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 12 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
 
-y_cursor += altura_banner + 22
-spacing_bloques = 20
+y_cursor += altura_banner + 18
+spacing_bloques = 16
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 26
+y_cursor += 24
 y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
 
 y_cursor += spacing_bloques
@@ -297,18 +319,18 @@ if current_l:
     lines_h.append(' '.join(current_l))
 
 altura_texto_caja = len(lines_h) * 22
-altura_caja = altura_texto_caja + 46
+altura_caja = altura_texto_caja + 44
 
 draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_top), (ANCHO - MARGEN_LATERAL, y_hallazgo_top + altura_caja)], radius=12, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
-draw.text((MARGEN_LATERAL + 20, y_hallazgo_top + 12), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
+draw.text((MARGEN_LATERAL + 20, y_hallazgo_top + 10), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
 
-draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 20, y_hallazgo_top + 38, ancho_caja_int, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
+draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 20, y_hallazgo_top + 34, ancho_caja_int, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
 
 y_cursor = y_hallazgo_top + altura_caja + spacing_bloques
 
 # BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 26
+y_cursor += 24
 y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
 
 # REFERENCIA Y PIE
@@ -324,7 +346,7 @@ nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
 draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 33), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente.")
+print("Infografía renderizada correctamente con hallazgos adaptativos.")
 
 # ==========================================
 # ✉️ 4. ENVÍO POR CORREO
@@ -356,7 +378,7 @@ msg = EmailMessage()
 msg['Subject'] = f"🧬 Dosis de Ciencia: {etiqueta_tema}"
 msg['From'] = remitente
 msg['To'] = remitente
-msg.set_content(f"Infografía generada con síntesis en 3ra persona y oraciones completas:\n\n{copy_redes}")
+msg.set_content(f"Infografía generada con hallazgos completos:\n\n{copy_redes}")
 
 with open("main.png", "rb") as f:
     msg.add_attachment(f.read(), maintype='image', subtype='png', filename="infografia_dosis_ciencia.png")
