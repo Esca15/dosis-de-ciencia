@@ -12,33 +12,49 @@ from deep_translator import GoogleTranslator
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
 
-# Módulo auxiliar para traducir texto al español de forma segura
-def traducir_a_espanol(texto):
+# Módulo para traducir y adaptar la voz a 3ra persona profesional
+def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
     try:
         traduccion = GoogleTranslator(source='auto', target='es').translate(texto)
-        return traduccion if traduccion else texto
+        if not traduccion:
+            traduccion = texto
+
+        # --- CORRECCIÓN DE VOZ A 3RA PERSONA ---
+        reemplazos_voz = {
+            r'\b[I|i]ntentamos\b': 'El estudio buscó',
+            r'\b[B|b]uscamos\b': 'El análisis buscó',
+            r'\b[I|i]dentificamos\b': 'Los autores identificaron',
+            r'\b[E|e]valuamos\b': 'La investigación evaluó',
+            r'\b[I|i]ncluimos\b': 'Se incluyeron',
+            r'\b[N|n]uestros resultados\b': 'Los resultados del estudio',
+            r'\b[E|e]ncontramos\b': 'Se encontró que',
+            r'\b[C|c]oncluimos\b': 'La evidencia concluye'
+        }
+        for patron, reemplazo in reemplazos_voz.items():
+            traduccion = re.sub(patron, reemplazo, traduccion)
+
+        # --- LIMPIEZA DE CARACTERES/PARÉNTESIS INCOMPLETOS AL FINAL ---
+        traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
+        if not traduccion.endswith('.'):
+            traduccion += '.'
+
+        return traduccion
     except Exception as e:
         print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
         return texto
 
-# Función para cortar por punto y seguido respetando oraciones completas
-def recortar_oraciones_completas(texto, max_caracteres=400):
-    if len(texto) <= max_caracteres:
-        return texto.strip()
+def obtener_oraciones_completas(texto, max_oraciones=2):
+    # Separar correctamente por puntos seguidos de espacio/mayúscula
+    oraciones = re.split(r'\.\s+', texto)
+    oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 15]
     
-    # Recortar hasta un límite cercano
-    fragmento = texto[:max_caracteres]
-    # Buscar el último punto en ese fragmento
-    ultimo_punto = fragmento.rfind('.')
-    
-    if ultimo_punto != -1 and ultimo_punto > 100:
-        return fragmento[:ultimo_punto + 1].strip()
-    else:
-        # Si no hay punto cercano, cortar en la última palabra completa
-        ultima_palabra = fragmento.rfind(' ')
-        return fragmento[:ultima_palabra].strip() + "..."
+    # Tomar las primeras N oraciones completas
+    seleccion = ". ".join(oraciones_validas[:max_oraciones])
+    if seleccion and not seleccion.endswith('.'):
+        seleccion += '.'
+    return seleccion
 
 # ==========================================
 # 🔄 1. ROTACIÓN Y BÚSQUEDA TEMÁTICA
@@ -73,12 +89,10 @@ def obtener_datos_estudio(termino):
             with urllib.request.urlopen(fetch_url) as response:
                 root_f = ET.fromstring(response.read())
                 
-                # Extraer título
                 titulo_elem = root_f.find(".//ArticleTitle")
                 titulo = titulo_elem.text if titulo_elem is not None and titulo_elem.text else ""
                 titulo = re.sub('<[^<]+?>', '', titulo)
 
-                # Extraer abstract con etiquetas
                 abstract_elems = root_f.findall(".//AbstractText")
                 abstract_dict = {}
                 abstract_texts = []
@@ -93,14 +107,12 @@ def obtener_datos_estudio(termino):
                 if not abstract_completo or len(abstract_completo) < 150:
                     continue
 
-                # Extraer revista y año
                 journal_elem = root_f.find(".//Journal/Title")
                 source = journal_elem.text if journal_elem is not None else "Revista Científica"
                 
                 year_elem = root_f.find(".//JournalIssue/PubDate/Year")
                 pubdate = year_elem.text[:4] if year_elem is not None else "2026"
 
-                # Extraer autores
                 author_list = root_f.findall(".//Author")
                 primer_autor = "Investigadores et al."
                 if author_list:
@@ -123,40 +135,34 @@ def obtener_datos_estudio(termino):
 
 estudio = obtener_datos_estudio(termino_busqueda)
 
-# Extraer contenido y TRADUCIRLO AL ESPAÑOL RESPETANDO ORACIONES
 if estudio:
     ref_vancouver = estudio["referencia"]
-    titulo_estudio_es = traducir_a_espanol(estudio["titulo"])
+    titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     abs_dict = estudio["abstract_dict"]
     abs_full = estudio["abstract_completo"]
     
-    # 1. Problema / Objetivo
+    # Extractos por sección
     prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
     if not prob_text:
-        sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
-        prob_text = sentences[0] if sentences else f"Evaluación de evidencia reciente en {etiqueta_tema.lower()}."
-    
-    # 2. Hallazgo Principal / Resultados
+        prob_text = obtener_oraciones_completas(abs_full, max_oraciones=1)
+
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     if not hall_text:
-        sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
-        hall_text = " ".join(sentences[1:3]) if len(sentences) > 2 else abs_full[:350]
+        hall_text = obtener_oraciones_completas(abs_full, max_oraciones=2)
 
-    # 3. Conclusión Clínica
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
     if not conc_text:
-        sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
-        conc_text = sentences[-1] if len(sentences) > 1 else abs_full[-250:]
+        conc_text = obtener_oraciones_completas(abs_full, max_oraciones=1)
 
-    # Asegurar oraciones completas antes de traducir
-    prob_clean = recortar_oraciones_completas(prob_text, max_caracteres=350)
-    hall_clean = recortar_oraciones_completas(hall_text, max_caracteres=450)
-    conc_clean = recortar_oraciones_completas(conc_text, max_caracteres=350)
+    # Extraer oraciones sintácticas completas
+    prob_clean = obtener_oraciones_completas(prob_text, max_oraciones=2)
+    hall_clean = obtener_oraciones_completas(hall_text, max_oraciones=2)
+    conc_clean = obtener_oraciones_completas(conc_text, max_oraciones=2)
 
-    # Traducir a español
-    problema_texto = traducir_a_espanol(prob_clean)
-    hallazgo_texto = traducir_a_espanol(hall_clean)
-    conclusion_texto = traducir_a_espanol(conc_clean)
+    # Traducir y redactar en 3ra persona
+    problema_texto = traducir_y_adaptar(prob_clean)
+    hallazgo_texto = traducir_y_adaptar(hall_clean)
+    conclusion_texto = traducir_y_adaptar(conc_clean)
 
 else:
     ref_vancouver = "Bermeo-Eskandani JR, et al. Análisis de evidencia en ciencias de la salud. Rev Med UAEMéx. 2026; PMID: 41964104."
@@ -165,7 +171,7 @@ else:
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
 
-print("3. Generando infografía con distribución ajustada y oraciones completas...")
+print("3. Generando infografía...")
 
 # ==========================================
 # 🖼️ 3. RENDERIZADO GRÁFICO (Canvas 1080x1080)
@@ -176,7 +182,6 @@ ANCHO_UTIL = ANCHO - (2 * MARGEN_LATERAL)
 img = Image.new("RGB", (ANCHO, ALTO), color="#FFFFFF")
 draw = ImageDraw.Draw(img)
 
-# Fuentes
 font_path_bold = "/usr/share/fonts/truetype/roboto/unhinted/Roboto-Bold.ttf"
 font_path_reg = "/usr/share/fonts/truetype/roboto/unhinted/Roboto-Regular.ttf"
 if not os.path.exists(font_path_bold):
@@ -234,7 +239,7 @@ def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=
         y_offset += line_height + line_spacing
     return y_offset, len(lines)
 
-# 1. Cabecera (0 a 100 px)
+# 1. Cabecera
 draw.rectangle([(0, 0), (ANCHO, 100)], fill="#FFFFFF")
 draw.text((MARGEN_LATERAL, 32), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
 w_dosis = draw.textlength("DOSIS DE CIENCIA", font=fuente_cabecera)
@@ -251,7 +256,7 @@ try:
 except Exception:
     pass
 
-# 2. Bloque Banner Principal Dinámico
+# 2. Banner
 y_cursor = 115
 tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=45)
 sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=80)
@@ -266,21 +271,20 @@ draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_c
 draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 12), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
 draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 12 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
 
-y_cursor += altura_banner + 25
-spacing_bloques = 24
+y_cursor += altura_banner + 22
+spacing_bloques = 20
 
-# --- BLOQUE 1: PROBLEMA CLÍNICO ---
+# BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
 y_cursor += 26
 y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
 
 y_cursor += spacing_bloques
 
-# --- BLOQUE 2: HALLAZGO PRINCIPAL (CAJA ADAPTATIVA DINÁMICA) ---
+# BLOQUE 2: HALLAZGO PRINCIPAL
 y_hallazgo_top = y_cursor
 ancho_caja_int = ANCHO_UTIL - 40
 
-# Pre-calcular exactamente cuántas líneas ocupará el hallazgo traducido
 words = hallazgo_texto.split()
 lines_h, current_l = [], []
 for w in words:
@@ -292,9 +296,8 @@ for w in words:
 if current_l:
     lines_h.append(' '.join(current_l))
 
-# Altura proporcional real
-altura_texto_caja = len(lines_h) * 23
-altura_caja = altura_texto_caja + 48
+altura_texto_caja = len(lines_h) * 22
+altura_caja = altura_texto_caja + 46
 
 draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_top), (ANCHO - MARGEN_LATERAL, y_hallazgo_top + altura_caja)], radius=12, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
 draw.text((MARGEN_LATERAL + 20, y_hallazgo_top + 12), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
@@ -303,26 +306,25 @@ draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 20, y_hallazgo_top + 
 
 y_cursor = y_hallazgo_top + altura_caja + spacing_bloques
 
-# --- BLOQUE 3: CONCLUSIÓN CLÍNICA ---
+# BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
 y_cursor += 26
 y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo, COLOR_TEXTO_OSCURO, line_spacing=4)
 
-# --- PIE DE PÁGINA Y REFERENCIA (Anclados abajo) ---
+# REFERENCIA Y PIE
 draw.line([(MARGEN_LATERAL, 910), (ANCHO - MARGEN_LATERAL, 910)], fill="#E5E7EB", width=1)
 draw.text((MARGEN_LATERAL, 918), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
 
 ref_lines = textwrap.wrap(ref_vancouver, width=110)
 draw.multiline_text((MARGEN_LATERAL, 936), "\n".join(ref_lines[:4]), fill="#4B5563", font=fuente_ref_reg, spacing=2)
 
-# Barra verde institucional inferior
 draw.rectangle([(0, ALTO - 50), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
 draw.text((MARGEN_LATERAL, ALTO - 33), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
 nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
 draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 33), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente con oraciones completas y espacio aprovechado.")
+print("Infografía renderizada correctamente.")
 
 # ==========================================
 # ✉️ 4. ENVÍO POR CORREO
@@ -354,7 +356,7 @@ msg = EmailMessage()
 msg['Subject'] = f"🧬 Dosis de Ciencia: {etiqueta_tema}"
 msg['From'] = remitente
 msg['To'] = remitente
-msg.set_content(f"Infografía generada con oraciones completas y maquetación ajustada:\n\n{copy_redes}")
+msg.set_content(f"Infografía generada con síntesis en 3ra persona y oraciones completas:\n\n{copy_redes}")
 
 with open("main.png", "rb") as f:
     msg.add_attachment(f.read(), maintype='image', subtype='png', filename="infografia_dosis_ciencia.png")
