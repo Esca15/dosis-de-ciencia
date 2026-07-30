@@ -8,8 +8,21 @@ import xml.etree.ElementTree as ET
 from PIL import Image, ImageDraw, ImageFont
 import smtplib
 from email.message import EmailMessage
+from deep_translator import GoogleTranslator
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
+
+# Módulo auxiliar para traducir texto al español de forma segura
+def traducir_a_espanol(texto):
+    if not texto or len(texto.strip()) == 0:
+        return ""
+    try:
+        # Se traduce fragmento por fragmento si es un texto largo
+        traduccion = GoogleTranslator(source='auto', target='es').translate(texto)
+        return traduccion if traduccion else texto
+    except Exception as e:
+        print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
+        return texto
 
 # ==========================================
 # 🔄 1. ROTACIÓN Y BÚSQUEDA TEMÁTICA
@@ -47,7 +60,7 @@ def obtener_datos_estudio(termino):
                 # Extraer título
                 titulo_elem = root_f.find(".//ArticleTitle")
                 titulo = titulo_elem.text if titulo_elem is not None and titulo_elem.text else ""
-                titulo = re.sub('<[^<]+?>', '', titulo) # Limpiar tags HTML/XML
+                titulo = re.sub('<[^<]+?>', '', titulo)
 
                 # Extraer abstract con etiquetas
                 abstract_elems = root_f.findall(".//AbstractText")
@@ -94,10 +107,10 @@ def obtener_datos_estudio(termino):
 
 estudio = obtener_datos_estudio(termino_busqueda)
 
-# Extraer contenido clínicamente relevante del abstract real
+# Extraer contenido y TRADUCIRLO AL ESPAÑOL
 if estudio:
     ref_vancouver = estudio["referencia"]
-    titulo_estudio = estudio["titulo"]
+    titulo_estudio_es = traducir_a_espanol(estudio["titulo"])
     abs_dict = estudio["abstract_dict"]
     abs_full = estudio["abstract_completo"]
     
@@ -106,30 +119,32 @@ if estudio:
     if not prob_text:
         sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
         prob_text = sentences[0] if sentences else f"Evaluación de evidencia reciente en {etiqueta_tema.lower()}."
-    problema_texto = prob_text[:280] + ("..." if len(prob_text) > 280 else "")
-
+    
     # 2. Hallazgo Principal / Resultados
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     if not hall_text:
         sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
         hall_text = " ".join(sentences[1:3]) if len(sentences) > 2 else abs_full[:250]
-    hallazgo_texto = hall_text[:320] + ("..." if len(hall_text) > 320 else "")
 
     # 3. Conclusión Clínica
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
     if not conc_text:
         sentences = [s.strip() for s in re.split(r'\. |\n', abs_full) if len(s) > 20]
         conc_text = sentences[-1] if len(sentences) > 1 else abs_full[-200:]
-    conclusion_texto = conc_text[:280] + ("..." if len(conc_text) > 280 else "")
+
+    # Traducir los 3 bloques principales al español
+    problema_texto = traducir_a_espanol(prob_text[:280])
+    hallazgo_texto = traducir_a_espanol(hall_text[:320])
+    conclusion_texto = traducir_a_espanol(conc_text[:280])
 
 else:
     ref_vancouver = "Bermeo-Eskandani JR, et al. Análisis de evidencia en ciencias de la salud. Rev Med UAEMéx. 2026; PMID: 41964104."
-    titulo_estudio = "Evaluación sistemática y modelos de análisis en ciencias de la salud"
+    titulo_estudio_es = "Evaluación sistemática y modelos de análisis en ciencias de la salud"
     problema_texto = "Existe una alta heterogeneidad en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
 
-print("3. Generando infografía con distribución vertical completa...")
+print("3. Generando infografía en español...")
 
 # ==========================================
 # 🖼️ 3. RENDERIZADO GRÁFICO (Canvas 1080x1080)
@@ -218,9 +233,8 @@ except Exception:
 # 2. Bloque Banner Principal Dinámico
 y_cursor = 115
 tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=45)
-sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio}", width=80)
+sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=80)
 
-# Limitar sublíneas del título para evitar desbordamiento excesivo pero mostrando más contexto
 if len(sub_lines) > 3:
     sub_lines = sub_lines[:3]
     sub_lines[-1] += "..."
@@ -289,7 +303,7 @@ nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
 draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 33), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente con síntesis clínica real.")
+print("Infografía renderizada correctamente en español.")
 
 # ==========================================
 # ✉️ 4. ENVÍO POR CORREO
@@ -300,7 +314,7 @@ contrasena = os.environ.get("CONTRASENA_APP")
 copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 
 📌 ESTUDIO ANALIZADO:
-{titulo_estudio}
+{titulo_estudio_es}
 
 🔍 PROBLEMA CLÍNICO:
 {problema_texto}
@@ -318,10 +332,10 @@ copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 """
 
 msg = EmailMessage()
-msg['Subject'] = f"🧬 Dosis de Ciencia (Optimizado): {etiqueta_tema}"
+msg['Subject'] = f"🧬 Dosis de Ciencia (Español): {etiqueta_tema}"
 msg['From'] = remitente
 msg['To'] = remitente
-msg.set_content(f"Infografía generada con síntesis clínica real y maquetación ajustada:\n\n{copy_redes}")
+msg.set_content(f"Infografía generada traducida al español con síntesis clínica real:\n\n{copy_redes}")
 
 with open("main.png", "rb") as f:
     msg.add_attachment(f.read(), maintype='image', subtype='png', filename="infografia_dosis_ciencia.png")
