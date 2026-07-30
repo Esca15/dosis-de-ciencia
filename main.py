@@ -1,6 +1,5 @@
 import os
 import datetime
-import subprocess
 import textwrap
 import urllib.request
 import re
@@ -13,51 +12,25 @@ from deep_translator import GoogleTranslator
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
 
-# --- FUNCIÓN DE LIMPIEZA Y NORMALIZACIÓN DE SÍMBOLOS ESTADÍSTICOS Y CIENTÍFICOS ---
+# --- FUNCIÓN DE LIMPIEZA Y NORMALIZACIÓN DE SÍMBOLOS ESTADÍSTICOS ---
 def limpiar_y_normalizar_simbolos(texto):
-    """
-    Sustituye caracteres griegos, matemáticos y especiales comunes en estadística
-    por representaciones estándar que las fuentes truetype no fallen al renderizar.
-    """
     if not texto:
         return ""
     
-    # Tabla de reemplazos de símbolos estadísticos
     reemplazos_simbolos = {
-        '±': ' +/- ',
-        '≤': ' <= ',
-        '≥': ' >= ',
-        '≠': ' != ',
-        '≈': ' aprox. ',
-        'α': 'alfa',
-        'β': 'beta',
-        'χ': 'Chi',
-        'χ²': 'Chi-cuadrado',
-        'χ2': 'Chi-cuadrado',
-        'p<': 'p < ',
-        'p>': 'p > ',
-        'p=': 'p = ',
-        'P<': 'P < ',
-        'P>': 'P > ',
-        'P=': 'P = ',
-        '°': ' grad. ',
-        'µ': 'u',
-        '–': '-',
-        '—': '-',
-        '“': '"',
-        '”': '"',
-        '‘': "'",
-        '’': "'"
+        '±': ' +/- ', '≤': ' <= ', '≥': ' >= ', '≠': ' != ', '≈': ' aprox. ',
+        'α': 'alfa', 'β': 'beta', 'χ': 'Chi', 'χ²': 'Chi-cuadrado', 'χ2': 'Chi-cuadrado',
+        'p<': 'p < ', 'p>': 'p > ', 'p=': 'p = ', 'P<': 'P < ', 'P>': 'P > ', 'P=': 'P = ',
+        '°': ' grad. ', 'µ': 'u', '–': '-', '—': '-', '“': '"', '”': '"', '‘': "'", '’': "'"
     }
     
     for simbolo, reemplazo in reemplazos_simbolos.items():
         texto = texto.replace(simbolo, reemplazo)
         
-    # Normalizar Unicode para eliminar diacríticos raros
     texto = unicodedata.normalize('NFC', texto)
     return texto
 
-# Módulo para traducir y adaptar la voz a 3ra persona profesional
+# --- TRADUCCIÓN Y ADAPTACIÓN A 3RA PERSONA ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
@@ -66,7 +39,6 @@ def traducir_y_adaptar(texto):
         if not traduccion:
             traduccion = texto
 
-        # --- CORRECCIÓN DE VOZ A 3RA PERSONA ---
         reemplazos_voz = {
             r'\b[I|i]ntentamos\b': 'El estudio buscó',
             r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -80,7 +52,6 @@ def traducir_y_adaptar(texto):
         for patron, reemplazo in reemplazos_voz.items():
             traduccion = re.sub(patron, reemplazo, traduccion)
 
-        # Limpieza de símbolos y paréntesis desparejos
         traduccion = limpiar_y_normalizar_simbolos(traduccion)
         traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
         if not traduccion.endswith('.'):
@@ -91,18 +62,14 @@ def traducir_y_adaptar(texto):
         print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
         return limpiar_y_normalizar_simbolos(texto)
 
-# --- FUNCIÓN DE EXTRACCIÓN AMPLIADA (1300 CARACTERES) ---
+# --- EXTRACCIÓN MEJORADA HASTA 1300 CARACTERES ---
 def obtener_oraciones_completas(texto, max_caracteres=1300):
-    """
-    Extrae oraciones completas permitiendo un margen amplio de hasta 1300 caracteres
-    para abarcar de 7 a 8 oraciones de la sección de resultados.
-    """
     if not texto:
         return ""
         
-    # Separar por puntos seguidos de espacio o salto de línea
+    # Split por puntos seguidos de espacio
     oraciones = re.split(r'\.\s+|\n+', texto)
-    oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 15]
+    oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 10]
     
     resultado = []
     longitud_acumulada = 0
@@ -110,7 +77,7 @@ def obtener_oraciones_completas(texto, max_caracteres=1300):
     for oracion in oraciones_validas:
         if longitud_acumulada + len(oracion) <= max_caracteres:
             resultado.append(oracion)
-            longitud_acumulada += len(oracion)
+            longitud_acumulada += len(oracion) + 2
         else:
             if not resultado:
                 resultado.append(oracion)
@@ -137,7 +104,7 @@ else:
     etiqueta_tema = "Divulgación Científica y Metodología"
 
 # ==========================================
-# 🔍 2. PROCESAMIENTO INTELIGENTE DEL ABSTRACT
+# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED
 # ==========================================
 def obtener_datos_estudio(termino):
     base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=5&retmode=xml"
@@ -161,10 +128,12 @@ def obtener_datos_estudio(termino):
                 abstract_elems = root_f.findall(".//AbstractText")
                 abstract_dict = {}
                 abstract_texts = []
+                
                 for a in abstract_elems:
-                    label = a.attrib.get('Label', 'TEXT').upper()
-                    text_content = a.text if a.text else ""
-                    abstract_dict[label] = text_content
+                    label = a.attrib.get('Label', '').upper()
+                    text_content = "".join(a.itertext()).strip()
+                    if label:
+                        abstract_dict[label] = text_content
                     abstract_texts.append(text_content)
                 
                 abstract_completo = " ".join(abstract_texts)
@@ -206,23 +175,25 @@ if estudio:
     abs_dict = estudio["abstract_dict"]
     abs_full = estudio["abstract_completo"]
     
+    # 1. Estratificación inteligente de las secciones
     prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
-    if not prob_text:
-        prob_text = abs_full
-
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
-    if not hall_text:
-        hall_text = abs_full
-
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
-    if not conc_text:
-        conc_text = abs_full
 
-    # Extracción:
-    # Problema y Conclusión: ~250 caracteres
-    # Hallazgo Principal: Hasta 1300 caracteres (captura completa de 7+ oraciones)
+    # Si el abstract no estaba estructurado formalmente por etiquetas
+    if not hall_text:
+        oraciones_todas = re.split(r'\.\s+', abs_full)
+        tot_or = len(oraciones_todas)
+        if tot_or >= 5:
+            prob_text = ". ".join(oraciones_todas[:1])
+            hall_text = ". ".join(oraciones_todas[1:-1])  # Toma todo el núcleo del abstract
+            conc_text = ". ".join(oraciones_todas[-1:])
+        else:
+            hall_text = abs_full
+
+    # Extracción por límite de caracteres
     prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=250)
-    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1300)
+    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1300) # Límite para 7+ oraciones
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=250)
 
     problema_texto = traducir_y_adaptar(prob_clean)
@@ -255,19 +226,19 @@ if not os.path.exists(font_path_bold):
 
 fuente_cabecera = ImageFont.truetype(font_path_bold, 28)
 fuente_titulo = ImageFont.truetype(font_path_bold, 22)
-fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 19)
-fuente_subtitulo = ImageFont.truetype(font_path_reg, 16)
-fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 17)
+fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 18)
+fuente_subtitulo = ImageFont.truetype(font_path_reg, 15)
+fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 16)
 fuente_pie = ImageFont.truetype(font_path_reg, 18)
-fuente_ref_bold = ImageFont.truetype(font_path_bold, 14)
-fuente_ref_reg = ImageFont.truetype(font_path_reg, 13)
+fuente_ref_bold = ImageFont.truetype(font_path_bold, 13)
+fuente_ref_reg = ImageFont.truetype(font_path_reg, 12)
 
 COLOR_VERDE_UAEM = "#1E4D2B"
 COLOR_ORO_UAEM = "#C5A059"
 COLOR_TEXTO_OSCURO = "#1A1A1A"
 COLOR_GRIS_CLARO = "#F8F9FA"
 
-def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=4):
+def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=3):
     words = text.split()
     lines, current_line = [], []
     for word in words:
@@ -305,62 +276,61 @@ def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=
     return y_offset, len(lines)
 
 # 1. Cabecera
-draw.rectangle([(0, 0), (ANCHO, 100)], fill="#FFFFFF")
-draw.text((MARGEN_LATERAL, 32), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
+draw.rectangle([(0, 0), (ANCHO, 90)], fill="#FFFFFF")
+draw.text((MARGEN_LATERAL, 28), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
 w_dosis = draw.textlength("DOSIS DE CIENCIA", font=fuente_cabecera)
-draw.text((MARGEN_LATERAL + w_dosis, 32), " | Evidencia Científica", fill=COLOR_ORO_UAEM, font=fuente_cabecera)
-draw.line([(MARGEN_LATERAL, 100), (ANCHO - MARGEN_LATERAL, 100)], fill="#E5E7EB", width=1)
+draw.text((MARGEN_LATERAL + w_dosis, 28), " | Evidencia Científica", fill=COLOR_ORO_UAEM, font=fuente_cabecera)
+draw.line([(MARGEN_LATERAL, 90), (ANCHO - MARGEN_LATERAL, 90)], fill="#E5E7EB", width=1)
 
 try:
     if os.path.exists("logo_institucional.png"):
         logo = Image.open("logo_institucional.png")
-        max_h = 65
+        max_h = 55
         ratio = logo.width / logo.height
         logo = logo.resize((int(max_h * ratio), max_h), Image.Resampling.LANCZOS)
-        img.paste(logo, (ANCHO - MARGEN_LATERAL - logo.width, (100 - max_h) // 2), mask=logo if logo.mode == 'RGBA' else None)
+        img.paste(logo, (ANCHO - MARGEN_LATERAL - logo.width, (90 - max_h) // 2), mask=logo if logo.mode == 'RGBA' else None)
 except Exception:
     pass
 
-# 2. Banner
-y_cursor = 115
-tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=45)
-sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=80)
+# 2. Banner Adaptativo (Sin recortar el título)
+y_cursor = 100
+tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=50)
+sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=85) # Muestra todo el título
 
-if len(sub_lines) > 2:
-    sub_lines = sub_lines[:2]
-    sub_lines[-1] += "..."
+altura_banner = (len(tit_lines) * 26) + (len(sub_lines) * 18) + 18
 
-altura_banner = (len(tit_lines) * 28) + (len(sub_lines) * 20) + 20
+draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=10, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
+draw.multiline_text((MARGEN_LATERAL + 15, y_cursor + 8), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=3)
+draw.multiline_text((MARGEN_LATERAL + 15, y_cursor + 8 + (len(tit_lines) * 26)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
 
-draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=12, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
-draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 10), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
-draw.multiline_text((MARGEN_LATERAL + 20, y_cursor + 10 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
-
-y_cursor += altura_banner + 14
-spacing_bloques = 14
+y_cursor += altura_banner + 12
+spacing_bloques = 10
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 22
-y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=3)
+y_cursor += 20
+y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=2)
 
 y_cursor += spacing_bloques
 
-# BLOQUE 2: HALLAZGO PRINCIPAL (TIPOGRAFÍA ADAPTATIVA PARA 1300 CARACTERES)
+# BLOQUE 2: HALLAZGO PRINCIPAL (ESCALADO DINÁMICO REACCIONANTE)
 y_hallazgo_top = y_cursor
-ancho_caja_int = ANCHO_UTIL - 40
+ancho_caja_int = ANCHO_UTIL - 30
 
-# Escalado automático de fuente según la extensión de los resultados extraídos
-if len(hallazgo_texto) > 750:
-    fuente_hallazgo = ImageFont.truetype(font_path_reg, 14)
-    line_step = 17
-elif len(hallazgo_texto) > 450:
-    fuente_hallazgo = ImageFont.truetype(font_path_reg, 15)
-    line_step = 19
+# Algoritmo para ajustar la fuente según el número de caracteres (admite hasta 1300 caracteres holgadamente)
+len_h = len(hallazgo_texto)
+if len_h > 1000:
+    sz_font, line_sp = 12, 15
+elif len_h > 700:
+    sz_font, line_sp = 13.5, 17
+elif len_h > 400:
+    sz_font, line_sp = 15, 19
 else:
-    fuente_hallazgo = fuente_cuerpo_estandar
-    line_step = 22
+    sz_font, line_sp = 16, 21
 
+fuente_hallazgo = ImageFont.truetype(font_path_reg, int(sz_font))
+
+# Calcular alto exacto de la caja
 words = hallazgo_texto.split()
 lines_h, current_l = [], []
 for w in words:
@@ -372,35 +342,34 @@ for w in words:
 if current_l:
     lines_h.append(' '.join(current_l))
 
-altura_texto_caja = len(lines_h) * line_step
-altura_caja = altura_texto_caja + 36
+altura_caja = (len(lines_h) * line_sp) + 32
 
-draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_top), (ANCHO - MARGEN_LATERAL, y_hallazgo_top + altura_caja)], radius=12, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
-draw.text((MARGEN_LATERAL + 20, y_hallazgo_top + 8), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
+draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_top), (ANCHO - MARGEN_LATERAL, y_hallazgo_top + altura_caja)], radius=10, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
+draw.text((MARGEN_LATERAL + 15, y_hallazgo_top + 6), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
 
-draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 20, y_hallazgo_top + 30, ancho_caja_int, fuente_hallazgo, COLOR_TEXTO_OSCURO, line_spacing=2)
+draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 15, y_hallazgo_top + 26, ancho_caja_int, fuente_hallazgo, COLOR_TEXTO_OSCURO, line_spacing=2)
 
 y_cursor = y_hallazgo_top + altura_caja + spacing_bloques
 
 # BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 22
-y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=3)
+y_cursor += 20
+y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=2)
 
-# REFERENCIA Y PIE
-draw.line([(MARGEN_LATERAL, 910), (ANCHO - MARGEN_LATERAL, 910)], fill="#E5E7EB", width=1)
-draw.text((MARGEN_LATERAL, 918), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
+# REFERENCIA Y PIE DE PÁGINA
+draw.line([(MARGEN_LATERAL, 920), (ANCHO - MARGEN_LATERAL, 920)], fill="#E5E7EB", width=1)
+draw.text((MARGEN_LATERAL, 926), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
 
-ref_lines = textwrap.wrap(ref_vancouver, width=110)
-draw.multiline_text((MARGEN_LATERAL, 936), "\n".join(ref_lines[:3]), fill="#4B5563", font=fuente_ref_reg, spacing=2)
+ref_lines = textwrap.wrap(ref_vancouver, width=120)
+draw.multiline_text((MARGEN_LATERAL, 942), "\n".join(ref_lines[:3]), fill="#4B5563", font=fuente_ref_reg, spacing=2)
 
-draw.rectangle([(0, ALTO - 50), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
-draw.text((MARGEN_LATERAL, ALTO - 33), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
+draw.rectangle([(0, ALTO - 45), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
+draw.text((MARGEN_LATERAL, ALTO - 30), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
 nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
-draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 33), nombre_pie, fill="#FFFFFF", font=fuente_pie)
+draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 30), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente con símbolos normalizados y hallazgos ampliados.")
+print("Infografía renderizada correctamente con hallazgos completos.")
 
 # ==========================================
 # ✉️ 4. ENVÍO POR CORREO
