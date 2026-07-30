@@ -62,6 +62,20 @@ def traducir_y_adaptar(texto):
         print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
         return limpiar_y_normalizar_simbolos(texto)
 
+# --- CLASIFICACIÓN DINÁMICA POR PALABRAS CLAVE ---
+def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
+    texto_completo = f"{titulo_es} {abstract_es}".lower()
+    
+    kw_dental = ["dental", "odonto", "caries", "periodont", "endodon", "maxilofac", "salud bucal", "diente", "oral", "fluor"]
+    kw_bioest = ["estadístic", "metaanálisis", "meta-análisis", "ensayo clínico", "modelo", "regresión", "prevalencia", "cohorte", "pronóstico", "predict", "variables"]
+    
+    if any(k in texto_completo for k in kw_dental):
+        return "Salud y Odontología Basada en Evidencia"
+    elif any(k in texto_completo for k in kw_bioest):
+        return "Bioestadística y Análisis de Datos"
+    else:
+        return tema_por_defecto
+
 # --- EXTRACCIÓN HASTA 1300 CARACTERES ---
 def obtener_oraciones_completas(texto, max_caracteres=1300):
     if not texto:
@@ -94,13 +108,13 @@ dia_actual = datetime.datetime.now().weekday()
 
 if dia_actual == 0:
     termino_busqueda = "biostatistics health research meta-analysis"
-    etiqueta_tema = "Bioestadística y Análisis de Datos"
+    etiqueta_defecto = "Bioestadística y Análisis de Datos"
 elif dia_actual == 2:
     termino_busqueda = "dental public health clinical trials systematic review"
-    etiqueta_tema = "Salud y Odontología Basada en Evidencia"
+    etiqueta_defecto = "Salud y Odontología Basada en Evidencia"
 else:
     termino_busqueda = "science communication health systematic review"
-    etiqueta_tema = "Divulgación Científica y Metodología"
+    etiqueta_defecto = "Divulgación Científica y Metodología"
 
 # ==========================================
 # 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED
@@ -196,12 +210,18 @@ if estudio:
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
 
+    # ✅ Clasificación inteligente si se encontró estudio en PubMed:
+    etiqueta_tema = clasificar_area_tematica(titulo_estudio_es, hallazgo_texto, etiqueta_defecto)
+
 else:
-    ref_vancouver = "Bermeo-Eskandani JR, et al. Análisis de evidencia en ciencias de la salud. Rev Med UAEMéx. 2026; PMID: 41964104."
+    ref_vancouver = "Bermeo-Escalona JR, et al. Análisis de evidencia en ciencias de la salud. Rev Med UAEMéx. 2026; PMID: 41964104."
     titulo_estudio_es = "Evaluación sistemática y modelos de análisis en ciencias de la salud"
     problema_texto = "Existe una alta heterogeneidad en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
+
+    # ✅ Asignación si falla la búsqueda (cae en el backup):
+    etiqueta_tema = etiqueta_defecto
 
 print("3. Generando infografía...")
 
