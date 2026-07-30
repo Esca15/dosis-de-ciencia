@@ -221,12 +221,12 @@ if not os.path.exists(font_path_bold):
     font_path_reg = "/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf"
 
 fuente_cabecera = ImageFont.truetype(font_path_bold, 26)
-fuente_titulo = ImageFont.truetype(font_path_bold, 20)
-fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 18)
+fuente_titulo = ImageFont.truetype(font_path_bold, 21)
+fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 19)
 fuente_subtitulo = ImageFont.truetype(font_path_reg, 15)
 
-# Tipografía unificada para lectura cómoda en dispositivos móviles
-fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 16)
+# --- TIPOGRAFÍA Y LEGAJO OPTIMIZADO (Legibilidad y llenado visual) ---
+fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 17) # Incrementado a 17pt
 
 fuente_pie = ImageFont.truetype(font_path_reg, 17)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 13)
@@ -237,7 +237,7 @@ COLOR_ORO_UAEM = "#C5A059"
 COLOR_TEXTO_OSCURO = "#1A1A1A"
 COLOR_GRIS_CLARO = "#F8F9FA"
 
-def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=5):
+def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=7):
     words = text.split()
     lines, current_line = [], []
     for word in words:
@@ -293,22 +293,22 @@ except Exception:
 
 # 2. Banner
 y_cursor = 100
-tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=52)
-sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=88)
+tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=50)
+sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=82)
 
-altura_banner = (len(tit_lines) * 26) + (len(sub_lines) * 19) + 20
+altura_banner = (len(tit_lines) * 28) + (len(sub_lines) * 20) + 22
 
 draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=8, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
-draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=3)
-draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10 + (len(tit_lines) * 26)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=3)
 
-y_cursor += altura_banner + 22
-spacing_bloques = 22
+y_cursor += altura_banner + 30
+spacing_bloques = 32  # Espaciado entre módulos aumentado a 32px para mejor aireado
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 24
-y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
+y_cursor += 28
+y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
 
 y_cursor += spacing_bloques
 
@@ -318,9 +318,9 @@ ancho_indentado = ANCHO_UTIL - 24
 x_texto_hallazgo = MARGEN_LATERAL + 24
 
 draw.text((MARGEN_LATERAL, y_hallazgo_top), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor_hallazgo = y_hallazgo_top + 26
+y_cursor_hallazgo = y_hallazgo_top + 28
 
-y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
+y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
 
 # Barra de acento lateral dorada
 draw.line([(MARGEN_LATERAL + 6, y_cursor_hallazgo - 2), (MARGEN_LATERAL + 6, y_fin_hallazgo - 4)], fill=COLOR_ORO_UAEM, width=5)
@@ -329,16 +329,30 @@ y_cursor = y_fin_hallazgo + spacing_bloques
 
 # BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 24
-y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
+y_cursor += 28
+y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
 
-# REFERENCIA Y PIE
-draw.line([(MARGEN_LATERAL, 915), (ANCHO - MARGEN_LATERAL, 915)], fill="#E5E7EB", width=1)
-draw.text((MARGEN_LATERAL, 924), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
 
-ref_lines = textwrap.wrap(ref_vancouver, width=120)
-draw.multiline_text((MARGEN_LATERAL, 942), "\n".join(ref_lines[:3]), fill="#4B5563", font=fuente_ref_reg, spacing=3)
+# --- REFERENCIA Y PIE DE PÁGINA (ANCLAJE DINÁMICO) ---
+# En lugar de fijar Y=915, la referencia se coloca pegada al footer inferior (ALTO - 48)
+ref_lines = textwrap.wrap(ref_vancouver, width=115)
+lineas_ref = ref_lines[:3]
+altura_texto_ref = len(lineas_ref) * 16
 
+y_referencia_bloque = (ALTO - 48) - 25 - altura_texto_ref - 20 # 20px extra de margen de seguridad
+
+# Si el texto de arriba es muy largo y amenaza con colisionar, usamos un mínimo relativo
+if y_cursor > y_referencia_bloque - 15:
+    y_referencia_bloque = y_cursor + 20
+
+# Dibujar la línea divisoria superior de la referencia
+draw.line([(MARGEN_LATERAL, y_referencia_bloque), (ANCHO - MARGEN_LATERAL, y_referencia_bloque)], fill="#E5E7EB", width=1)
+
+# Dibujar título y texto de la referencia
+draw.text((MARGEN_LATERAL, y_referencia_bloque + 10), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
+draw.multiline_text((MARGEN_LATERAL, y_referencia_bloque + 28), "\n".join(lineas_ref), fill="#4B5563", font=fuente_ref_reg, spacing=3)
+
+# Footer inferior Verde UAEM
 draw.rectangle([(0, ALTO - 48), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
 draw.text((MARGEN_LATERAL, ALTO - 32), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
 nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
