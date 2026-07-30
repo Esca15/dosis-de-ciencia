@@ -62,12 +62,11 @@ def traducir_y_adaptar(texto):
         print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
         return limpiar_y_normalizar_simbolos(texto)
 
-# --- EXTRACCIÓN MEJORADA HASTA 1300 CARACTERES ---
+# --- EXTRACCIÓN HASTA 1300 CARACTERES ---
 def obtener_oraciones_completas(texto, max_caracteres=1300):
     if not texto:
         return ""
         
-    # Split por puntos seguidos de espacio
     oraciones = re.split(r'\.\s+|\n+', texto)
     oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 10]
     
@@ -175,25 +174,22 @@ if estudio:
     abs_dict = estudio["abstract_dict"]
     abs_full = estudio["abstract_completo"]
     
-    # 1. Estratificación inteligente de las secciones
     prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
 
-    # Si el abstract no estaba estructurado formalmente por etiquetas
     if not hall_text:
         oraciones_todas = re.split(r'\.\s+', abs_full)
         tot_or = len(oraciones_todas)
         if tot_or >= 5:
             prob_text = ". ".join(oraciones_todas[:1])
-            hall_text = ". ".join(oraciones_todas[1:-1])  # Toma todo el núcleo del abstract
+            hall_text = ". ".join(oraciones_todas[1:-1])
             conc_text = ". ".join(oraciones_todas[-1:])
         else:
             hall_text = abs_full
 
-    # Extracción por límite de caracteres
     prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=250)
-    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1300) # Límite para 7+ oraciones
+    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1300)
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=250)
 
     problema_texto = traducir_y_adaptar(prob_clean)
@@ -210,7 +206,7 @@ else:
 print("3. Generando infografía...")
 
 # ==========================================
-# 🖼️ 3. RENDERIZADO GRÁFICO (Canvas 1080x1080)
+# 🖼️ 3. RENDERIZADO GRÁFICO OPTIMIZADO (1080x1080)
 # ==========================================
 ANCHO, ALTO, MARGEN_LATERAL = 1080, 1080, 60
 ANCHO_UTIL = ANCHO - (2 * MARGEN_LATERAL)
@@ -224,12 +220,15 @@ if not os.path.exists(font_path_bold):
     font_path_bold = "/usr/share/fonts/truetype/roboto/Roboto-Bold.ttf"
     font_path_reg = "/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf"
 
-fuente_cabecera = ImageFont.truetype(font_path_bold, 28)
-fuente_titulo = ImageFont.truetype(font_path_bold, 22)
+fuente_cabecera = ImageFont.truetype(font_path_bold, 26)
+fuente_titulo = ImageFont.truetype(font_path_bold, 20)
 fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 18)
 fuente_subtitulo = ImageFont.truetype(font_path_reg, 15)
+
+# Tipografía unificada para lectura cómoda en dispositivos móviles
 fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 16)
-fuente_pie = ImageFont.truetype(font_path_reg, 18)
+
+fuente_pie = ImageFont.truetype(font_path_reg, 17)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 13)
 fuente_ref_reg = ImageFont.truetype(font_path_reg, 12)
 
@@ -238,7 +237,7 @@ COLOR_ORO_UAEM = "#C5A059"
 COLOR_TEXTO_OSCURO = "#1A1A1A"
 COLOR_GRIS_CLARO = "#F8F9FA"
 
-def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=3):
+def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=5):
     words = text.split()
     lines, current_line = [], []
     for word in words:
@@ -276,11 +275,11 @@ def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=
     return y_offset, len(lines)
 
 # 1. Cabecera
-draw.rectangle([(0, 0), (ANCHO, 90)], fill="#FFFFFF")
-draw.text((MARGEN_LATERAL, 28), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
+draw.rectangle([(0, 0), (ANCHO, 85)], fill="#FFFFFF")
+draw.text((MARGEN_LATERAL, 26), "DOSIS DE CIENCIA", fill=COLOR_VERDE_UAEM, font=fuente_cabecera)
 w_dosis = draw.textlength("DOSIS DE CIENCIA", font=fuente_cabecera)
-draw.text((MARGEN_LATERAL + w_dosis, 28), " | Evidencia Científica", fill=COLOR_ORO_UAEM, font=fuente_cabecera)
-draw.line([(MARGEN_LATERAL, 90), (ANCHO - MARGEN_LATERAL, 90)], fill="#E5E7EB", width=1)
+draw.text((MARGEN_LATERAL + w_dosis, 26), " | Evidencia Científica", fill=COLOR_ORO_UAEM, font=fuente_cabecera)
+draw.line([(MARGEN_LATERAL, 85), (ANCHO - MARGEN_LATERAL, 85)], fill="#E5E7EB", width=1)
 
 try:
     if os.path.exists("logo_institucional.png"):
@@ -288,88 +287,65 @@ try:
         max_h = 55
         ratio = logo.width / logo.height
         logo = logo.resize((int(max_h * ratio), max_h), Image.Resampling.LANCZOS)
-        img.paste(logo, (ANCHO - MARGEN_LATERAL - logo.width, (90 - max_h) // 2), mask=logo if logo.mode == 'RGBA' else None)
+        img.paste(logo, (ANCHO - MARGEN_LATERAL - logo.width, (85 - max_h) // 2), mask=logo if logo.mode == 'RGBA' else None)
 except Exception:
     pass
 
-# 2. Banner Adaptativo (Sin recortar el título)
+# 2. Banner
 y_cursor = 100
-tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=50)
-sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=85) # Muestra todo el título
+tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=52)
+sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=88)
 
-altura_banner = (len(tit_lines) * 26) + (len(sub_lines) * 18) + 18
+altura_banner = (len(tit_lines) * 26) + (len(sub_lines) * 19) + 20
 
-draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=10, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
-draw.multiline_text((MARGEN_LATERAL + 15, y_cursor + 8), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=3)
-draw.multiline_text((MARGEN_LATERAL + 15, y_cursor + 8 + (len(tit_lines) * 26)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
+draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=8, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=3)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10 + (len(tit_lines) * 26)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=2)
 
-y_cursor += altura_banner + 12
-spacing_bloques = 10
+y_cursor += altura_banner + 22
+spacing_bloques = 22
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 20
-y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=2)
+y_cursor += 24
+y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
 y_cursor += spacing_bloques
 
-# BLOQUE 2: HALLAZGO PRINCIPAL (ESCALADO DINÁMICO REACCIONANTE)
+# BLOQUE 2: HALLAZGO PRINCIPAL (BARRA DE ACENTO EDITORIAL DORADA)
 y_hallazgo_top = y_cursor
-ancho_caja_int = ANCHO_UTIL - 30
+ancho_indentado = ANCHO_UTIL - 24
+x_texto_hallazgo = MARGEN_LATERAL + 24
 
-# Algoritmo para ajustar la fuente según el número de caracteres (admite hasta 1300 caracteres holgadamente)
-len_h = len(hallazgo_texto)
-if len_h > 1000:
-    sz_font, line_sp = 12, 15
-elif len_h > 700:
-    sz_font, line_sp = 13.5, 17
-elif len_h > 400:
-    sz_font, line_sp = 15, 19
-else:
-    sz_font, line_sp = 16, 21
+draw.text((MARGEN_LATERAL, y_hallazgo_top), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
+y_cursor_hallazgo = y_hallazgo_top + 26
 
-fuente_hallazgo = ImageFont.truetype(font_path_reg, int(sz_font))
+y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
-# Calcular alto exacto de la caja
-words = hallazgo_texto.split()
-lines_h, current_l = [], []
-for w in words:
-    if draw.textlength(' '.join(current_l + [w]), font=fuente_hallazgo) <= ancho_caja_int:
-        current_l.append(w)
-    else:
-        lines_h.append(' '.join(current_l))
-        current_l = [w]
-if current_l:
-    lines_h.append(' '.join(current_l))
+# Barra de acento lateral dorada
+draw.line([(MARGEN_LATERAL + 6, y_cursor_hallazgo - 2), (MARGEN_LATERAL + 6, y_fin_hallazgo - 4)], fill=COLOR_ORO_UAEM, width=5)
 
-altura_caja = (len(lines_h) * line_sp) + 32
-
-draw.rounded_rectangle([(MARGEN_LATERAL, y_hallazgo_top), (ANCHO - MARGEN_LATERAL, y_hallazgo_top + altura_caja)], radius=10, fill="#FDFBF7", outline=COLOR_ORO_UAEM, width=2)
-draw.text((MARGEN_LATERAL + 15, y_hallazgo_top + 6), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-
-draw_justified_text(draw, hallazgo_texto, MARGEN_LATERAL + 15, y_hallazgo_top + 26, ancho_caja_int, fuente_hallazgo, COLOR_TEXTO_OSCURO, line_spacing=2)
-
-y_cursor = y_hallazgo_top + altura_caja + spacing_bloques
+y_cursor = y_fin_hallazgo + spacing_bloques
 
 # BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 20
-y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=2)
+y_cursor += 24
+y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
-# REFERENCIA Y PIE DE PÁGINA
-draw.line([(MARGEN_LATERAL, 920), (ANCHO - MARGEN_LATERAL, 920)], fill="#E5E7EB", width=1)
-draw.text((MARGEN_LATERAL, 926), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
+# REFERENCIA Y PIE
+draw.line([(MARGEN_LATERAL, 915), (ANCHO - MARGEN_LATERAL, 915)], fill="#E5E7EB", width=1)
+draw.text((MARGEN_LATERAL, 924), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
 
 ref_lines = textwrap.wrap(ref_vancouver, width=120)
-draw.multiline_text((MARGEN_LATERAL, 942), "\n".join(ref_lines[:3]), fill="#4B5563", font=fuente_ref_reg, spacing=2)
+draw.multiline_text((MARGEN_LATERAL, 942), "\n".join(ref_lines[:3]), fill="#4B5563", font=fuente_ref_reg, spacing=3)
 
-draw.rectangle([(0, ALTO - 45), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
-draw.text((MARGEN_LATERAL, ALTO - 30), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
+draw.rectangle([(0, ALTO - 48), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
+draw.text((MARGEN_LATERAL, ALTO - 32), "UAEMéx • Facultad de Odontología", fill=COLOR_ORO_UAEM, font=fuente_pie)
 nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
-draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 30), nombre_pie, fill="#FFFFFF", font=fuente_pie)
+draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 32), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente con hallazgos completos.")
+print("Infografía renderizada correctamente con estilo editorial estandarizado.")
 
 # ==========================================
 # ✉️ 4. ENVÍO POR CORREO
