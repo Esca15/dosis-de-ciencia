@@ -106,13 +106,16 @@ def obtener_oraciones_completas(texto, max_caracteres=1300):
 # ==========================================
 dia_actual = datetime.datetime.now().weekday()
 
-if dia_actual == 0:
+if dia_actual == 0:  # Lunes
     termino_busqueda = "biostatistics health research meta-analysis"
     etiqueta_defecto = "Bioestadística y Análisis de Datos"
-elif dia_actual == 2:
+elif dia_actual == 2:  # Miércoles
     termino_busqueda = "dental public health clinical trials systematic review"
     etiqueta_defecto = "Salud y Odontología Basada en Evidencia"
-else:
+elif dia_actual == 4:  # Viernes
+    termino_busqueda = "research methodology health science systematic review"
+    etiqueta_defecto = "Divulgación Científica y Metodología"
+else:  # Fallback por si se corre en fin de semana
     termino_busqueda = "science communication health systematic review"
     etiqueta_defecto = "Divulgación Científica y Metodología"
 
