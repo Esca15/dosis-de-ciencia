@@ -10,7 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 import smtplib
 from email.message import EmailMessage
 from deep_translator import GoogleTranslator
-import time  # Placed with global imports
+import time
+import random  # <-- Agregado para selección aleatoria
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
 
@@ -22,7 +23,6 @@ def traducir_y_adaptar(texto):
     traduccion = None
     intentos = 3
     
-    # Bucle de reintentos por si la API da Error 500
     for i in range(intentos):
         try:
             res = GoogleTranslator(source='auto', target='es').translate(texto)
@@ -36,12 +36,10 @@ def traducir_y_adaptar(texto):
             print(f"Intento {i+1} de traducción falló ({e}). Reintentando en 2s...")
             time.sleep(2)
 
-    # Si tras 3 intentos no se pudo traducir limpiamente, usa el texto original en inglés
     if not traduccion:
         print("Aviso: No se pudo obtener una traducción limpia. Se usará el texto original en inglés para evitar errores.")
         traduccion = texto
 
-    # Adaptación a tercera persona
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -128,16 +126,19 @@ else:  # Fallback por si se corre en fin de semana
     etiqueta_defecto = "Divulgación Científica y Metodología"
 
 # ==========================================
-# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED
+# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED (FLEXIBILIZADO A 15 RESULTADOS)
 # ==========================================
 def obtener_datos_estudio(termino):
-    base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=5&retmode=xml"
+    # retmax=15 para ampliar la muestra reciente
+    base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=15&retmode=xml"
     try:
         with urllib.request.urlopen(base_url_search) as response:
             root = ET.fromstring(response.read())
             pmids = [elem.text for elem in root.findall('.//IdList/Id')]
     except Exception:
         return None
+
+    candidatos = []
 
     for pmid in pmids:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
@@ -180,15 +181,20 @@ def obtener_datos_estudio(termino):
 
                 referencia = f"{primer_autor} {titulo}. {source}. {pubdate}; PMID: {pmid}."
                 
-                return {
+                candidatos.append({
                     "pmid": pmid,
                     "titulo": titulo,
                     "abstract_completo": abstract_completo,
                     "abstract_dict": abstract_dict,
                     "referencia": referencia
-                }
+                })
         except Exception:
             continue
+
+    # Si hay candidatos válidos, elige uno al azar
+    if candidatos:
+        return random.choice(candidatos)
+
     return None
 
 estudio = obtener_datos_estudio(termino_busqueda)
@@ -221,7 +227,6 @@ if estudio:
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
 
-    # Clasificación inteligente si se encontró estudio en PubMed
     etiqueta_tema = clasificar_area_tematica(titulo_estudio_es, hallazgo_texto, etiqueta_defecto)
 
 else:
