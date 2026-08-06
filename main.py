@@ -2,6 +2,7 @@ import os
 import datetime
 import textwrap
 import urllib.request
+import urllib.parse
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -9,58 +10,59 @@ from PIL import Image, ImageDraw, ImageFont
 import smtplib
 from email.message import EmailMessage
 from deep_translator import GoogleTranslator
+import time  # Placed with global imports
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
 
-# --- FUNCIÓN DE LIMPIEZA Y NORMALIZACIÓN DE SÍMBOLOS ESTADÍSTICOS ---
-def limpiar_y_normalizar_simbolos(texto):
-    if not texto:
-        return ""
-    
-    reemplazos_simbolos = {
-        '±': ' +/- ', '≤': ' <= ', '≥': ' >= ', '≠': ' != ', '≈': ' aprox. ',
-        'α': 'alfa', 'β': 'beta', 'χ': 'Chi', 'χ²': 'Chi-cuadrado', 'χ2': 'Chi-cuadrado',
-        'p<': 'p < ', 'p>': 'p > ', 'p=': 'p = ', 'P<': 'P < ', 'P>': 'P > ', 'P=': 'P = ',
-        '°': ' grad. ', 'µ': 'u', '–': '-', '—': '-', '“': '"', '”': '"', '‘': "'", '’': "'"
-    }
-    
-    for simbolo, reemplazo in reemplazos_simbolos.items():
-        texto = texto.replace(simbolo, reemplazo)
-        
-    texto = unicodedata.normalize('NFC', texto)
-    return texto
-
-# --- TRADUCCIÓN Y ADAPTACIÓN A 3RA PERSONA ---
+# --- TRADUCCIÓN Y ADAPTACIÓN A 3RA PERSONA (PROTEGIDA) ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
-    try:
-        traduccion = GoogleTranslator(source='auto', target='es').translate(texto)
-        if not traduccion:
-            traduccion = texto
+    
+    traduccion = None
+    intentos = 3
+    
+    # Bucle de reintentos por si la API da Error 500
+    for i in range(intentos):
+        try:
+            res = GoogleTranslator(source='auto', target='es').translate(texto)
+            if res and "Error 500" not in res and "That's an error" not in res:
+                traduccion = res
+                break
+            else:
+                print(f"Intento {i+1}: La API devolvió una respuesta de error. Reintentando...")
+                time.sleep(2)
+        except Exception as e:
+            print(f"Intento {i+1} de traducción falló ({e}). Reintentando en 2s...")
+            time.sleep(2)
 
-        reemplazos_voz = {
-            r'\b[I|i]ntentamos\b': 'El estudio buscó',
-            r'\b[B|b]uscamos\b': 'El análisis buscó',
-            r'\b[I|i]dentificamos\b': 'Los autores identificaron',
-            r'\b[E|e]valuamos\b': 'La investigación evaluó',
-            r'\b[I|i]ncluimos\b': 'Se incluyeron',
-            r'\b[N|n]uestros resultados\b': 'Los resultados del estudio',
-            r'\b[E|e]ncontramos\b': 'Se encontró que',
-            r'\b[C|c]oncluimos\b': 'La evidencia concluye'
-        }
-        for patron, reemplazo in reemplazos_voz.items():
-            traduccion = re.sub(patron, reemplazo, traduccion)
+    # Si tras 3 intentos no se pudo traducir limpiamente, usa el texto original en inglés
+    if not traduccion:
+        print("Aviso: No se pudo obtener una traducción limpia. Se usará el texto original en inglés para evitar errores.")
+        traduccion = texto
 
+    # Adaptación a tercera persona
+    reemplazos_voz = {
+        r'\b[I|i]ntentamos\b': 'El estudio buscó',
+        r'\b[B|b]uscamos\b': 'El análisis buscó',
+        r'\b[I|i]dentificamos\b': 'Los autores identificaron',
+        r'\b[E|e]valuamos\b': 'La investigación evaluó',
+        r'\b[I|i]ncluimos\b': 'Se incluyeron',
+        r'\b[N|n]uestros resultados\b': 'Los resultados del estudio',
+        r'\b[E|e]ncontramos\b': 'Se encontró que',
+        r'\b[C|c]oncluimos\b': 'La evidencia concluye'
+    }
+    for patron, reemplazo in reemplazos_voz.items():
+        traduccion = re.sub(patron, reemplazo, traduccion)
+
+    if 'limpiar_y_normalizar_simbolos' in globals():
         traduccion = limpiar_y_normalizar_simbolos(traduccion)
-        traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
-        if not traduccion.endswith('.'):
-            traduccion += '.'
+        
+    traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
+    if not traduccion.endswith('.'):
+        traduccion += '.'
 
-        return traduccion
-    except Exception as e:
-        print(f"Nota: No se pudo traducir el fragmento ({e}), se usará el texto original.")
-        return limpiar_y_normalizar_simbolos(texto)
+    return traduccion
 
 # --- CLASIFICACIÓN DINÁMICA POR PALABRAS CLAVE ---
 def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
@@ -100,6 +102,12 @@ def obtener_oraciones_completas(texto, max_caracteres=1300):
     if seleccion and not seleccion.endswith('.'):
         seleccion += '.'
     return seleccion
+
+def limpiar_y_normalizar_simbolos(texto):
+    if not texto:
+        return ""
+    texto = unicodedata.normalize('NFKC', texto)
+    return texto.strip()
 
 # ==========================================
 # 🔄 1. ROTACIÓN Y BÚSQUEDA TEMÁTICA
@@ -213,7 +221,7 @@ if estudio:
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
 
-    # ✅ Clasificación inteligente si se encontró estudio en PubMed:
+    # Clasificación inteligente si se encontró estudio en PubMed
     etiqueta_tema = clasificar_area_tematica(titulo_estudio_es, hallazgo_texto, etiqueta_defecto)
 
 else:
@@ -223,7 +231,6 @@ else:
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
 
-    # ✅ Asignación si falla la búsqueda (cae en el backup):
     etiqueta_tema = etiqueta_defecto
 
 print("3. Generando infografía...")
@@ -248,8 +255,7 @@ fuente_titulo = ImageFont.truetype(font_path_bold, 21)
 fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 19)
 fuente_subtitulo = ImageFont.truetype(font_path_reg, 15)
 
-# --- TIPOGRAFÍA Y LEGAJO OPTIMIZADO (Legibilidad y llenado visual) ---
-fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 17) # Incrementado a 17pt
+fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 17)
 
 fuente_pie = ImageFont.truetype(font_path_reg, 17)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 13)
@@ -326,7 +332,7 @@ draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12), "\n".join(tit_lines), 
 draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=3)
 
 y_cursor += altura_banner + 30
-spacing_bloques = 32  # Espaciado entre módulos aumentado a 32px para mejor aireado
+spacing_bloques = 32
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
@@ -335,7 +341,7 @@ y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor
 
 y_cursor += spacing_bloques
 
-# BLOQUE 2: HALLAZGO PRINCIPAL (BARRA DE ACENTO EDITORIAL DORADA)
+# BLOQUE 2: HALLAZGO PRINCIPAL
 y_hallazgo_top = y_cursor
 ancho_indentado = ANCHO_UTIL - 24
 x_texto_hallazgo = MARGEN_LATERAL + 24
@@ -345,7 +351,6 @@ y_cursor_hallazgo = y_hallazgo_top + 28
 
 y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
 
-# Barra de acento lateral dorada
 draw.line([(MARGEN_LATERAL + 6, y_cursor_hallazgo - 2), (MARGEN_LATERAL + 6, y_fin_hallazgo - 4)], fill=COLOR_ORO_UAEM, width=5)
 
 y_cursor = y_fin_hallazgo + spacing_bloques
@@ -355,23 +360,18 @@ draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_U
 y_cursor += 28
 y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
 
-
-# --- REFERENCIA Y PIE DE PÁGINA (ANCLAJE DINÁMICO) ---
-# En lugar de fijar Y=915, la referencia se coloca pegada al footer inferior (ALTO - 48)
+# --- REFERENCIA Y PIE DE PÁGINA ---
 ref_lines = textwrap.wrap(ref_vancouver, width=115)
 lineas_ref = ref_lines[:3]
 altura_texto_ref = len(lineas_ref) * 16
 
-y_referencia_bloque = (ALTO - 48) - 25 - altura_texto_ref - 20 # 20px extra de margen de seguridad
+y_referencia_bloque = (ALTO - 48) - 25 - altura_texto_ref - 20
 
-# Si el texto de arriba es muy largo y amenaza con colisionar, usamos un mínimo relativo
 if y_cursor > y_referencia_bloque - 15:
     y_referencia_bloque = y_cursor + 20
 
-# Dibujar la línea divisoria superior de la referencia
 draw.line([(MARGEN_LATERAL, y_referencia_bloque), (ANCHO - MARGEN_LATERAL, y_referencia_bloque)], fill="#E5E7EB", width=1)
 
-# Dibujar título y texto de la referencia
 draw.text((MARGEN_LATERAL, y_referencia_bloque + 10), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
 draw.multiline_text((MARGEN_LATERAL, y_referencia_bloque + 28), "\n".join(lineas_ref), fill="#4B5563", font=fuente_ref_reg, spacing=3)
 
