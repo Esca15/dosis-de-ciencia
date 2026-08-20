@@ -11,7 +11,7 @@ import smtplib
 from email.message import EmailMessage
 from deep_translator import GoogleTranslator
 import time
-import random  # <-- Agregado para selección aleatoria
+import random
 
 print("1. Determinando tema y realizando búsqueda en PubMed...")
 
@@ -121,29 +121,34 @@ elif dia_actual == 2:  # Miércoles
 elif dia_actual == 4:  # Viernes
     termino_busqueda = "research methodology health science systematic review"
     etiqueta_defecto = "Divulgación Científica y Metodología"
-else:  # Fallback por si se corre en fin de semana
+else:  # Fallback
     termino_busqueda = "science communication health systematic review"
     etiqueta_defecto = "Divulgación Científica y Metodología"
 
 # ==========================================
-# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED (FLEXIBILIZADO A 15 RESULTADOS)
+# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED
 # ==========================================
 def obtener_datos_estudio(termino):
-    # retmax=15 para ampliar la muestra reciente
-    base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=15&retmode=xml"
+    base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=40&retmode=xml"
     try:
-        with urllib.request.urlopen(base_url_search) as response:
+        req = urllib.request.Request(base_url_search, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
             pmids = [elem.text for elem in root.findall('.//IdList/Id')]
-    except Exception:
+    except Exception as e:
+        print(f"Error al buscar en PubMed: {e}")
         return None
+
+    # Barajamos los PMIDs para garantizar que en cada corrida la evaluación de artículos varíe
+    random.shuffle(pmids)
 
     candidatos = []
 
     for pmid in pmids:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         try:
-            with urllib.request.urlopen(fetch_url) as response:
+            req = urllib.request.Request(fetch_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
                 root_f = ET.fromstring(response.read())
                 
                 titulo_elem = root_f.find(".//ArticleTitle")
@@ -188,10 +193,12 @@ def obtener_datos_estudio(termino):
                     "abstract_dict": abstract_dict,
                     "referencia": referencia
                 })
+                
+                if len(candidatos) >= 5:
+                    break
         except Exception:
             continue
 
-    # Si hay candidatos válidos, elige uno al azar
     if candidatos:
         return random.choice(candidatos)
 
