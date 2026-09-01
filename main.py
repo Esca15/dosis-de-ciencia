@@ -37,7 +37,17 @@ else:  # Fallback
 # 📚 2. DICCIONARIOS Y REGLAS DE TRADUCCIÓN (SISTEMA DE 3 NIVELES)
 # ==========================================
 
-# NIVEL 1: Términos que se traducen DIRECTO en el texto (No van al glosario)
+MAPEO_SIGLAS_ES_EN = {
+    "EII": "IBD",
+    "IBD": "EII",
+    "DAV": "VAD",
+    "VAD": "DAV",
+    "ILT": "DLI",
+    "DLI": "ILT",
+    "CVRS": "HRQoL",
+    "HRQoL": "CVRS"
+}
+
 TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bOverall Survival\b': 'Supervivencia Global (SG)',
     r'\boverall survival\b': 'supervivencia global (SG)',
@@ -59,9 +69,9 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bEW/TTS\b': 'SAT/STT (Sistemas Alerta Temprana)',
     r'\bVADs?\b': 'DAV (Dispositivo de Asistencia Ventricular)',
     r'\bDLIs?\b': 'ILT (Infección de la Línea de Transmisión)',
+    r'\bIBDs?\b': 'EII (Enfermedad Inflamatoria Intestinal)'
 }
 
-# NIVEL 2: Siglas universales / estadísticas que se quedan tal cual en texto (No van al glosario)
 SIGLAS_UNIVERSALES_OMITIR_GLOSARIO = {
     "OR", "ORS", "HR", "HRS", "RR", "RRS", "CI", "CIS", "IC", "ICS",
     "SD", "SDS", "SE", "SES", "MD", "MDS", "SMD", "SMDS",
@@ -78,14 +88,9 @@ def aplicar_traducciones_directas(texto):
     return texto_trad
 
 def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
-    """
-    NIVEL 3 ROBUSTO: Captura siglas y definiciones tanto en mayúsculas como minúsculas,
-    normalizando plurales (VADs -> VAD).
-    """
     if not abstract_original_en:
         return {}
     
-    # Captura patrones flexibles tipo "ventricular assist devices (VADs)" o "Driveline Infections (DLI)"
     patron_definiciones = r'\b([a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
     coincidencias = re.findall(patron_definiciones, abstract_original_en)
     
@@ -93,18 +98,25 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
     translator = GoogleTranslator(source='en', target='es')
     
     for termino_en, sigla in coincidencias:
-        sigla_clean = sigla.strip().rstrip('sS')  # Elimina plurales de la sigla
+        sigla_en = sigla.strip().rstrip('sS')
         termino_en_clean = termino_en.strip().capitalize()
         
-        if sigla_clean in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
+        if sigla_en in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
             continue
             
         try:
-            def_es = translator.translate(termino_en_clean)
+            def_es = translator.translate(termino_en_clean).capitalize()
         except Exception:
             def_es = termino_en_clean
+        
+        sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
+        
+        if sigla_es != sigla_en:
+            entrada_sigla = f"{sigla_es} / {sigla_en}"
+        else:
+            entrada_sigla = sigla_en
             
-        glosario_especifico[sigla_clean] = f"{termino_en_clean} — {def_es}"
+        glosario_especifico[entrada_sigla] = f"{def_es} ({termino_en_clean})"
             
     return glosario_especifico
 
@@ -114,7 +126,6 @@ def limpiar_y_normalizar_simbolos(texto):
     texto = unicodedata.normalize('NFKC', texto)
     return texto.strip()
 
-# --- TRADUCCIÓN Y ADAPTACIÓN DE TEXTO ROBUSTA ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
@@ -171,7 +182,6 @@ def traducir_y_adaptar(texto):
 
     return traduccion
 
-# --- CLASIFICACIÓN DINÁMICA DE ÁREA ---
 def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
     texto_completo = f"{titulo_es} {abstract_es}".lower()
     kw_dental = ["dental", "odonto", "caries", "periodont", "endodon", "maxilofac", "salud bucal", "diente", "oral", "fluor"]
@@ -184,7 +194,6 @@ def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
     else:
         return tema_por_defecto
 
-# --- EXTRACCIÓN ESTRUCTURADA ---
 def extraer_problema_clinico_estructurado(abs_dict, abs_full):
     prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
     if prob_text:
@@ -330,11 +339,10 @@ if estudio:
         oraciones_todas = [o.strip() for o in re.split(r'\.\s+', abs_full) if len(o.strip()) > 15]
         conc_text = oraciones_todas[-1] if len(oraciones_todas) > 1 else abs_full
 
-    prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=350)
-    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
-    conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
+    prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=300)
+    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=950)
+    conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=250)
 
-    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS
     titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
@@ -343,7 +351,6 @@ if estudio:
     if problema_texto in hallazgo_texto:
         hallazgo_texto = hallazgo_texto.replace(problema_texto, "").strip()
 
-    # EXTRACCIÓN DEL MICRO-GLOSARIO DINÁMICO (NIVEL 3 ROBUSTO)
     texto_infografia_completo = f"{problema_texto} {hallazgo_texto} {conclusion_texto}"
     glosario_especifico_dict = extraer_siglas_medicas_especificas(abs_full, texto_infografia_completo)
 
@@ -377,10 +384,10 @@ if not os.path.exists(font_path_bold):
 
 fuente_cabecera = ImageFont.truetype(font_path_bold, 26)
 fuente_titulo = ImageFont.truetype(font_path_bold, 21)
-fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 19)
+fuente_subtitulo_sec = ImageFont.truetype(font_path_bold, 18)
 fuente_subtitulo = ImageFont.truetype(font_path_reg, 15)
 
-fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 17)
+fuente_cuerpo_estandar = ImageFont.truetype(font_path_reg, 16)
 
 fuente_pie = ImageFont.truetype(font_path_reg, 17)
 fuente_ref_bold = ImageFont.truetype(font_path_bold, 13)
@@ -391,7 +398,7 @@ COLOR_ORO_UAEM = "#C5A059"
 COLOR_TEXTO_OSCURO = "#1A1A1A"
 COLOR_GRIS_CLARO = "#F8F9FA"
 
-def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=7):
+def draw_justified_text(draw, text, x, y, width, font, fill_color, line_spacing=6):
     words = text.split()
     lines, current_line = [], []
     for word in words:
@@ -450,19 +457,19 @@ y_cursor = 100
 tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=50)
 sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=82)
 
-altura_banner = (len(tit_lines) * 28) + (len(sub_lines) * 20) + 22
+altura_banner = (len(tit_lines) * 26) + (len(sub_lines) * 19) + 20
 
 draw.rounded_rectangle([(MARGEN_LATERAL, y_cursor), (ANCHO - MARGEN_LATERAL, y_cursor + altura_banner)], radius=8, fill=COLOR_GRIS_CLARO, outline="#E5E7EB", width=1)
-draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
-draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 12 + (len(tit_lines) * 28)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=3)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10), "\n".join(tit_lines), fill=COLOR_VERDE_UAEM, font=fuente_titulo, spacing=4)
+draw.multiline_text((MARGEN_LATERAL + 18, y_cursor + 10 + (len(tit_lines) * 26)), "\n".join(sub_lines), fill="#4B5563", font=fuente_subtitulo, spacing=3)
 
-y_cursor += altura_banner + 30
-spacing_bloques = 32
+y_cursor += altura_banner + 24
+spacing_bloques = 24
 
 # BLOQUE 1: PROBLEMA CLÍNICO
 draw.text((MARGEN_LATERAL, y_cursor), "PROBLEMA CLÍNICO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 28
-y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
+y_cursor += 24
+y_cursor, _ = draw_justified_text(draw, problema_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
 y_cursor += spacing_bloques
 
@@ -472,9 +479,9 @@ ancho_indentado = ANCHO_UTIL - 24
 x_texto_hallazgo = MARGEN_LATERAL + 24
 
 draw.text((MARGEN_LATERAL, y_hallazgo_top), "HALLAZGO PRINCIPAL", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor_hallazgo = y_hallazgo_top + 28
+y_cursor_hallazgo = y_hallazgo_top + 24
 
-y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
+y_fin_hallazgo, _ = draw_justified_text(draw, hallazgo_texto, x_texto_hallazgo, y_cursor_hallazgo, ancho_indentado, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
 draw.line([(MARGEN_LATERAL + 6, y_cursor_hallazgo - 2), (MARGEN_LATERAL + 6, y_fin_hallazgo - 4)], fill=COLOR_ORO_UAEM, width=5)
 
@@ -482,23 +489,36 @@ y_cursor = y_fin_hallazgo + spacing_bloques
 
 # BLOQUE 3: CONCLUSIÓN CLÍNICA
 draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
-y_cursor += 28
-y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=7)
+y_cursor += 24
+y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
+
+# BLOQUE 4: GLOSARIO INTEGRADO (Sin recuadro, mismo estilo gráfico)
+if glosario_especifico_dict:
+    y_cursor += spacing_bloques
+    draw.text((MARGEN_LATERAL, y_cursor), "GLOSARIO DEL ESTUDIO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
+    y_cursor += 24
+    
+    lineas_glosario = []
+    for sigla, def_comp in glosario_especifico_dict.items():
+        lineas_glosario.append(f"• {sigla}: {def_comp}")
+    
+    texto_glosario_completo = "  |  ".join(lineas_glosario)
+    y_cursor, _ = draw_justified_text(draw, texto_glosario_completo, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
 # --- REFERENCIA Y PIE DE PÁGINA ---
 ref_lines = textwrap.wrap(ref_vancouver, width=115)
-lineas_ref = ref_lines[:3]
-altura_texto_ref = len(lineas_ref) * 16
+lineas_ref = ref_lines[:2]
+altura_texto_ref = len(lineas_ref) * 15
 
-y_referencia_bloque = (ALTO - 48) - 25 - altura_texto_ref - 20
+y_referencia_bloque = (ALTO - 48) - 20 - altura_texto_ref - 15
 
-if y_cursor > y_referencia_bloque - 15:
-    y_referencia_bloque = y_cursor + 20
+if y_cursor > y_referencia_bloque - 10:
+    y_referencia_bloque = y_cursor + 15
 
 draw.line([(MARGEN_LATERAL, y_referencia_bloque), (ANCHO - MARGEN_LATERAL, y_referencia_bloque)], fill="#E5E7EB", width=1)
 
-draw.text((MARGEN_LATERAL, y_referencia_bloque + 10), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
-draw.multiline_text((MARGEN_LATERAL, y_referencia_bloque + 28), "\n".join(lineas_ref), fill="#4B5563", font=fuente_ref_reg, spacing=3)
+draw.text((MARGEN_LATERAL, y_referencia_bloque + 8), "REFERENCIA BIBLIOGRÁFICA", fill="#6B7280", font=fuente_ref_bold)
+draw.multiline_text((MARGEN_LATERAL, y_referencia_bloque + 24), "\n".join(lineas_ref), fill="#4B5563", font=fuente_ref_reg, spacing=2)
 
 # Footer inferior Verde UAEM
 draw.rectangle([(0, ALTO - 48), (ANCHO, ALTO)], fill=COLOR_VERDE_UAEM)
