@@ -13,16 +13,93 @@ from deep_translator import GoogleTranslator
 import time
 import random
 
-print("1. Determinando tema y realizando búsqueda en PubMed...")
+print("1. Configurando parámetros y diccionarios de siglas...")
 
-# --- TRADUCCIÓN Y ADAPTACIÓN A 3RA PERSONA (PROTEGIDA) ---
+# ==========================================
+# 🔄 1. ROTACIÓN TEMÁTICA Y DÍAS
+# ==========================================
+dia_actual = datetime.datetime.now().weekday()
+
+if dia_actual == 0:   # Lunes
+    termino_busqueda = "biostatistics health research meta-analysis"
+    etiqueta_defecto = "Bioestadística y Análisis de Datos"
+elif dia_actual == 2:  # Miércoles
+    termino_busqueda = "dental public health clinical trials systematic review"
+    etiqueta_defecto = "Salud y Odontología Basada en Evidencia"
+elif dia_actual == 4:  # Viernes
+    termino_busqueda = "research methodology health science systematic review"
+    etiqueta_defecto = "Divulgación Científica y Metodología"
+else:  # Fallback
+    termino_busqueda = "science communication health systematic review"
+    etiqueta_defecto = "Divulgación Científica y Metodología"
+
+# ==========================================
+# 📚 2. DICCIONARIO Y PROCESADOR DE SIGLAS
+# ==========================================
+DICCIONARIO_SIGLAS_ESTANDAR = {
+    r'\bRCTs\b': 'Ensayos Clínicos Aleatorizados (ECA)',
+    r'\bRCT\b': 'Ensayo Clínico Aleatorizado (ECA)',
+    r'\bORs\b': 'Razones de Momios (OR)',
+    r'\bOR\b': 'Razón de Momios (OR)',
+    r'\bCIs\b': 'Intervalos de Confianza (IC)',
+    r'\bCI\b': 'Intervalo de Confianza (IC)',
+    r'\bHRs\b': 'Razones de Riesgo (HR)',
+    r'\bHR\b': 'Razón de Riesgo (HR)',
+    r'\bRRs\b': 'Riesgos Relativos (RR)',
+    r'\bRR\b': 'Riesgo Relativo (RR)',
+    r'\bSDs\b': 'Desviaciones Estándar (DE)',
+    r'\bSD\b': 'Desviación Estándar (DE)',
+    r'\bSEs\b': 'Errores Estándar (EE)',
+    r'\bSE\b': 'Error Estándar (EE)',
+    r'\bMDs\b': 'Diferencias de Medias (DM)',
+    r'\bMD\b': 'Diferencia de Medias (DM)',
+    r'\bSMDs\b': 'Diferencias de Medias Estandarizadas (DME)',
+    r'\bSMD\b': 'Diferencia de Medias Estandarizada (DME)',
+    r'\bANOVA\b': 'Análisis de Varianza (ANOVA)',
+    r'\bMANOVA\b': 'Análisis Multivariado de Varianza (MANOVA)',
+    r'\bPCA\b': 'Análisis de Componentes Principales (ACP)',
+    r'\bROC\b': 'Curva ROC (Característica Operativa del Receptor)',
+    r'\bAUC\b': 'Área Bajo la Curva (AUC)',
+    r'\bPRISMA\b': 'Declaración PRISMA',
+    r'\bSTROBE\b': 'Guía STROBE',
+    r'\bCONSORT\b': 'Declaración CONSORT',
+    r'\bCBCT\b': 'Tomografía Computarizada de Haz Cónico (CBCT)',
+    r'\bCAD/CAM\b': 'Diseño y Fabricación Asistidos por Computadora (CAD/CAM)',
+    r'\bDIS\b': 'Escáner Intraoral Digital (DIS)'
+}
+
+def expandir_siglas_del_texto(texto):
+    if not texto:
+        return ""
+    patron_siglas = r'\b([A-Z][a-z0-9\-]+(?:\s+[A-Za-z0-9\-]+){1,5})\s*\(([A-Z0-9]{2,8})\)'
+    definiciones = re.findall(patron_siglas, texto)
+    texto_expandido = texto
+    for termino_completo, sigla in definiciones:
+        patron_sigla_suelta = r'\b' + re.escape(sigla) + r'\b'
+        texto_expandido = re.sub(patron_sigla_suelta, termino_completo, texto_expandido)
+    return texto_expandido
+
+def normalizar_siglas_espanol(texto):
+    if not texto:
+        return ""
+    texto_normalizado = texto
+    for patron_sigla, reemplazo_es in DICCIONARIO_SIGLAS_ESTANDAR.items():
+        texto_normalizado = re.sub(patron_sigla, reemplazo_es, texto_normalizado)
+    return texto_normalizado
+
+def limpiar_y_normalizar_simbolos(texto):
+    if not texto:
+        return ""
+    texto = unicodedata.normalize('NFKC', texto)
+    return texto.strip()
+
+# --- TRADUCCIÓN Y ADAPTACIÓN ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
     
     traduccion = None
-    intentos = 3
-    
+    intentos = 4
     for i in range(intentos):
         try:
             res = GoogleTranslator(source='auto', target='es').translate(texto)
@@ -30,14 +107,11 @@ def traducir_y_adaptar(texto):
                 traduccion = res
                 break
             else:
-                print(f"Intento {i+1}: La API devolvió una respuesta de error. Reintentando...")
                 time.sleep(2)
-        except Exception as e:
-            print(f"Intento {i+1} de traducción falló ({e}). Reintentando en 2s...")
+        except Exception:
             time.sleep(2)
 
-    if not traduccion:
-        print("Aviso: No se pudo obtener una traducción limpia. Se usará el texto original en inglés para evitar errores.")
+    if not traduccion or len(traduccion.strip()) == 0:
         traduccion = texto
 
     reemplazos_voz = {
@@ -53,19 +127,18 @@ def traducir_y_adaptar(texto):
     for patron, reemplazo in reemplazos_voz.items():
         traduccion = re.sub(patron, reemplazo, traduccion)
 
-    if 'limpiar_y_normalizar_simbolos' in globals():
-        traduccion = limpiar_y_normalizar_simbolos(traduccion)
-        
+    traduccion = normalizar_siglas_espanol(traduccion)
+    traduccion = limpiar_y_normalizar_simbolos(traduccion)
     traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
+    
     if not traduccion.endswith('.'):
         traduccion += '.'
 
     return traduccion
 
-# --- CLASIFICACIÓN DINÁMICA POR PALABRAS CLAVE ---
+# --- CLASIFICACIÓN DINÁMICA ---
 def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
     texto_completo = f"{titulo_es} {abstract_es}".lower()
-    
     kw_dental = ["dental", "odonto", "caries", "periodont", "endodon", "maxilofac", "salud bucal", "diente", "oral", "fluor"]
     kw_bioest = ["estadístic", "metaanálisis", "meta-análisis", "ensayo clínico", "modelo", "regresión", "prevalencia", "cohorte", "pronóstico", "predict", "variables"]
     
@@ -76,14 +149,36 @@ def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
     else:
         return tema_por_defecto
 
-# --- EXTRACCIÓN HASTA 1300 CARACTERES ---
+# --- EXTRACCIÓN ESTRUCTURADA ---
+def extraer_problema_clinico_estructurado(abs_dict, abs_full):
+    prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
+    if prob_text:
+        return prob_text
+
+    oraciones = [o.strip() for o in re.split(r'\.\s+|\n+', abs_full) if len(o.strip()) > 15]
+    patrones_contexto = [
+        r'\baimed to\b', r'\bthe purpose of\b', r'\bwe evaluated\b', 
+        r'\blittle is known\b', r'\bremains unclear\b', r'\bdespite\b',
+        r'\bhowever\b', r'\black of\b', r'\bis a common\b', r'\bto investigate\b'
+    ]
+    
+    for oracion in oraciones[:3]:
+        if any(re.search(patron, oracion, re.IGNORECASE) for patron in patrones_contexto):
+            return oracion
+
+    if len(oraciones) >= 2:
+        contexto_unificado = f"{oraciones[0]}. {oraciones[1]}"
+        if len(contexto_unificado) <= 320:
+            return contexto_unificado
+        return oraciones[0]
+    
+    return abs_full
+
 def obtener_oraciones_completas(texto, max_caracteres=1300):
     if not texto:
         return ""
-        
     oraciones = re.split(r'\.\s+|\n+', texto)
     oraciones_validas = [o.strip() for o in oraciones if len(o.strip()) > 10]
-    
     resultado = []
     longitud_acumulada = 0
     
@@ -101,33 +196,11 @@ def obtener_oraciones_completas(texto, max_caracteres=1300):
         seleccion += '.'
     return seleccion
 
-def limpiar_y_normalizar_simbolos(texto):
-    if not texto:
-        return ""
-    texto = unicodedata.normalize('NFKC', texto)
-    return texto.strip()
+# ==========================================
+# 🔍 3. BÚSQUEDA Y EXTRACCIÓN PUBMED
+# ==========================================
+print("2. Buscando artículo relevante en PubMed...")
 
-# ==========================================
-# 🔄 1. ROTACIÓN Y BÚSQUEDA TEMÁTICA
-# ==========================================
-dia_actual = datetime.datetime.now().weekday()
-
-if dia_actual == 0:  # Lunes
-    termino_busqueda = "biostatistics health research meta-analysis"
-    etiqueta_defecto = "Bioestadística y Análisis de Datos"
-elif dia_actual == 2:  # Miércoles
-    termino_busqueda = "dental public health clinical trials systematic review"
-    etiqueta_defecto = "Salud y Odontología Basada en Evidencia"
-elif dia_actual == 4:  # Viernes
-    termino_busqueda = "research methodology health science systematic review"
-    etiqueta_defecto = "Divulgación Científica y Metodología"
-else:  # Fallback
-    termino_busqueda = "science communication health systematic review"
-    etiqueta_defecto = "Divulgación Científica y Metodología"
-
-# ==========================================
-# 🔍 2. PROCESAMIENTO ROBUSTO DEL XML DE PUBMED
-# ==========================================
 def obtener_datos_estudio(termino):
     base_url_search = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={urllib.parse.quote(termino)}&sort=pub_date&retmax=40&retmode=xml"
     try:
@@ -139,9 +212,7 @@ def obtener_datos_estudio(termino):
         print(f"Error al buscar en PubMed: {e}")
         return None
 
-    # Barajamos los PMIDs para garantizar que en cada corrida la evaluación de artículos varíe
     random.shuffle(pmids)
-
     candidatos = []
 
     for pmid in pmids:
@@ -208,28 +279,30 @@ estudio = obtener_datos_estudio(termino_busqueda)
 
 if estudio:
     ref_vancouver = limpiar_y_normalizar_simbolos(estudio["referencia"])
-    titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     abs_dict = estudio["abstract_dict"]
-    abs_full = estudio["abstract_completo"]
+    abs_full = expandir_siglas_del_texto(estudio["abstract_completo"])
     
-    prob_text = abs_dict.get("BACKGROUND", abs_dict.get("OBJECTIVE", abs_dict.get("INTRODUCTION", "")))
+    prob_text = extraer_problema_clinico_estructurado(abs_dict, abs_full)
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
 
+    prob_text = expandir_siglas_del_texto(prob_text)
+    
     if not hall_text:
-        oraciones_todas = re.split(r'\.\s+', abs_full)
-        tot_or = len(oraciones_todas)
-        if tot_or >= 5:
-            prob_text = ". ".join(oraciones_todas[:1])
-            hall_text = ". ".join(oraciones_todas[1:-1])
-            conc_text = ". ".join(oraciones_todas[-1:])
-        else:
-            hall_text = abs_full
+        oraciones_todas = [o.strip() for o in re.split(r'\.\s+', abs_full) if len(o.strip()) > 15]
+        hall_text = ". ".join(oraciones_todas[1:-1]) if len(oraciones_todas) >= 3 else abs_full
+    hall_text = expandir_siglas_del_texto(hall_text)
 
-    prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=250)
-    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1300)
-    conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=250)
+    if not conc_text:
+        oraciones_todas = [o.strip() for o in re.split(r'\.\s+', abs_full) if len(o.strip()) > 15]
+        conc_text = oraciones_todas[-1] if len(oraciones_todas) > 1 else abs_full
+    conc_text = expandir_siglas_del_texto(conc_text)
 
+    prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=350)
+    hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
+    conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
+
+    titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
@@ -242,14 +315,13 @@ else:
     problema_texto = "Existe una alta heterogeneidad en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
-
     etiqueta_tema = etiqueta_defecto
 
+# ==========================================
+# 🖼️ 4. RENDERIZADO GRÁFICO (1080x1080)
+# ==========================================
 print("3. Generando infografía...")
 
-# ==========================================
-# 🖼️ 3. RENDERIZADO GRÁFICO OPTIMIZADO (1080x1080)
-# ==========================================
 ANCHO, ALTO, MARGEN_LATERAL = 1080, 1080, 60
 ANCHO_UTIL = ANCHO - (2 * MARGEN_LATERAL)
 
@@ -332,7 +404,7 @@ try:
 except Exception:
     pass
 
-# 2. Banner
+# 2. Banner Tema / Título
 y_cursor = 100
 tit_lines = textwrap.wrap(f"Evidencia Actual en {etiqueta_tema}", width=50)
 sub_lines = textwrap.wrap(f"Análisis del estudio: {titulo_estudio_es}", width=82)
@@ -397,7 +469,7 @@ img.save("main.png")
 print("Infografía renderizada correctamente con estilo editorial estandarizado.")
 
 # ==========================================
-# ✉️ 4. ENVÍO POR CORREO
+# ✉️ 5. ENVÍO POR CORREO DE ALERTA
 # ==========================================
 remitente = os.environ.get("CORREO_DESTINO")
 contrasena = os.environ.get("CONTRASENA_APP")
