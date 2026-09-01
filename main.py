@@ -43,7 +43,8 @@ MAPEO_SIGLAS_ES_EN = {
     "ILT": "DLI", "DLI": "ILT",
     "CVRS": "HRQoL", "HRQoL": "CVRS",
     "EC": "CD", "CD": "EC",
-    "SSR": "SRH", "SRH": "SSR"
+    "SSR": "SRH", "SRH": "SSR",
+    "TNF": "FND", "FND": "TNF"
 }
 
 # Diccionario explícito para acrónimos de contexto regional, clínico y metodológico
@@ -51,6 +52,8 @@ DICCIONARIO_SIGLAS_ESTANDAR = {
     "NDIS": "Esquema Nacional de Seguro de Discapacidad de Australia (National Disability Insurance Scheme)",
     "SSR": "Salud Sexual y Reproductiva (Sexual and Reproductive Health)",
     "SRH": "Salud Sexual y Reproductiva (Sexual and Reproductive Health)",
+    "FND": "Trastorno Neurológico Funcional (Functional Neurological Disorder)",
+    "TNF": "Trastorno Neurológico Funcional (Functional Neurological Disorder)",
     "GRADE": "Sistema de Clasificación del Nivel de Evidencia (Grading of Recommendations Assessment, Development and Evaluation)",
     "PRISMA": "Elementos de Informe Preferidos para Revisiones Sistemáticas (Preferred Reporting Items for Systematic Reviews and Meta-Analyses)",
     "STROBE": "Fortalecimiento del Reporte de Estudios Observacionales en Epidemiología (Strengthening the Reporting of Observational Studies in Epidemiology)",
@@ -61,6 +64,9 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bSexual and Reproductive Health\b': 'Salud Sexual y Reproductiva (SSR)',
     r'\bsexual and reproductive health\b': 'salud sexual y reproductiva (SSR)',
     r'\bSRH\b': 'SSR',
+    r'\bFunctional Neurological Disorder\b': 'Trastorno Neurológico Funcional (TNF)',
+    r'\bfunctional neurological disorder\b': 'trastorno neurológico funcional (TNF)',
+    r'\bFND\b': 'TNF/FND',
     r'\bOverall Survival\b': 'Supervivencia Global (SG)',
     r'\boverall survival\b': 'supervivencia global (SG)',
     r'\bOS\b': 'SG',
@@ -116,18 +122,31 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
                 
             sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
             
+            # Si ya la tenemos estandarizada en el diccionario maestro, usarla prioritariamente
             if sigla_es in DICCIONARIO_SIGLAS_ESTANDAR:
                 glosario_especifico[sigla_es] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_es]
                 continue
-                
-            termino_en_clean = re.sub(r'^(and|or|with|by|for|in|of)\s+', '', termino_en_clean, flags=re.IGNORECASE).capitalize()
+            elif sigla_en in DICCIONARIO_SIGLAS_ESTANDAR:
+                glosario_especifico[sigla_en] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_en]
+                continue
+
+            # LIMPIEZA DE PALABRAS BASURA / FRAGMENTOS PREVIOS (Evita errores tipo "Moment in...")
+            patron_stop_words = r'^(at\s+that\s+moment\s+in|moment\s+in|patients?\s+with|changes?\s+in|rate\s+of|levels?\s+of|effects?\s+of|association\s+of|and|or|with|by|for|in|of|to|a|an|the)\s+'
+            termino_en_clean = re.sub(patron_stop_words, '', termino_en_clean, flags=re.IGNORECASE).strip().capitalize()
+
+            if len(termino_en_clean) < 4:
+                continue
 
             try:
                 def_es = translator.translate(termino_en_clean).capitalize()
             except Exception:
                 def_es = termino_en_clean
                 
-            glosario_especifico[sigla_es] = f"{def_es} ({termino_en_clean})"
+            # Evitar redundancia si el traductor devolvió exactamente la misma cadena en inglés
+            if def_es.lower() == termino_en_clean.lower():
+                glosario_especifico[sigla_es] = f"{def_es}"
+            else:
+                glosario_especifico[sigla_es] = f"{def_es} ({termino_en_clean})"
 
     # 2. Escaneo complementario: Buscar siglas presentes en el TEXTO FINAL traducido
     siglas_en_texto = set(re.findall(r'\b[A-Z]{2,8}\b', texto_traducido_es))
@@ -136,11 +155,9 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
         if sigla in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO:
             continue
             
-        # Si la sigla está en nuestro diccionario estandarizado
         if sigla in DICCIONARIO_SIGLAS_ESTANDAR and sigla not in glosario_especifico:
             glosario_especifico[sigla] = DICCIONARIO_SIGLAS_ESTANDAR[sigla]
             
-        # Si existe mapeo inverso (ej: si el texto tiene SRH pero la versión estandarizada es SSR)
         elif sigla in MAPEO_SIGLAS_ES_EN:
             sigla_mantenida = MAPEO_SIGLAS_ES_EN[sigla]
             if sigla_mantenida in DICCIONARIO_SIGLAS_ESTANDAR and sigla_mantenida not in glosario_especifico:
@@ -300,7 +317,6 @@ def obtener_datos_estudio(termino):
                 titulo = titulo_elem.text if titulo_elem is not None and titulo_elem.text else ""
                 titulo = re.sub('<[^<]+?>', '', titulo)
                 
-                # PREVENCIÓN DE DOBLE PUNTO
                 titulo_clean = titulo.strip().rstrip('.')
 
                 abstract_elems = root_f.findall(".//AbstractText")
