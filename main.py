@@ -34,7 +34,7 @@ else:  # Fallback
     etiqueta_defecto = "Divulgación Científica y Metodología"
 
 # ==========================================
-# 📚 2. DICCIONARIOS Y REGLAS DE TRADUCCIÓN (SISTEMA DE 3 NIVELES)
+# 📚 2. DICCIONARIOS Y REGLAS DE TRADUCCIÓN
 # ==========================================
 
 MAPEO_SIGLAS_ES_EN = {
@@ -45,7 +45,9 @@ MAPEO_SIGLAS_ES_EN = {
     "ILT": "DLI",
     "DLI": "ILT",
     "CVRS": "HRQoL",
-    "HRQoL": "CVRS"
+    "HRQoL": "CVRS",
+    "EC": "CD",
+    "CD": "EC"
 }
 
 # Diccionario explícito para acrónimos metodológicos/clínicos conocidos
@@ -77,7 +79,10 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bEW/TTS\b': 'SAT/STT (Sistemas Alerta Temprana)',
     r'\bVADs?\b': 'DAV (Dispositivo de Asistencia Ventricular)',
     r'\bDLIs?\b': 'ILT (Infección de la Línea de Transmisión)',
-    r'\bIBDs?\b': 'EII (Enfermedad Inflamatoria Intestinal)'
+    r'\bIBDs?\b': 'EII (Enfermedad Inflamatoria Intestinal)',
+    r'\bClinical Deterioration\b': 'Deterioro Clínico (EC)',
+    r'\bclinical deterioration\b': 'deterioro clínico (EC)',
+    r'\bCD\b': 'EC'
 }
 
 SIGLAS_UNIVERSALES_OMITIR_GLOSARIO = {
@@ -126,8 +131,13 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
         except Exception:
             def_es = termino_en_clean
         
+        # Traducir la sigla al español si existe en el mapa bidireccional (ej: CD -> EC)
         sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
-        entrada_sigla = f"{sigla_es} / {sigla_en}" if sigla_es != sigla_en else sigla_en
+        
+        if sigla_es != sigla_en:
+            entrada_sigla = sigla_es
+        else:
+            entrada_sigla = sigla_en
             
         glosario_especifico[entrada_sigla] = f"{def_es} ({termino_en_clean})"
             
@@ -137,6 +147,8 @@ def limpiar_y_normalizar_simbolos(texto):
     if not texto:
         return ""
     texto = unicodedata.normalize('NFKC', texto)
+    # Limpiar dobles puntos accidentales acumulados
+    texto = re.sub(r'\.{2,}', '.', texto)
     return texto.strip()
 
 def traducir_y_adaptar(texto):
@@ -283,6 +295,9 @@ def obtener_datos_estudio(termino):
                 titulo_elem = root_f.find(".//ArticleTitle")
                 titulo = titulo_elem.text if titulo_elem is not None and titulo_elem.text else ""
                 titulo = re.sub('<[^<]+?>', '', titulo)
+                
+                # PREVENCIÓN DE DOBLE PUNTO: Eliminar punto final del título si existe
+                titulo_clean = titulo.strip().rstrip('.')
 
                 abstract_elems = root_f.findall(".//AbstractText")
                 abstract_dict = {}
@@ -302,6 +317,7 @@ def obtener_datos_estudio(termino):
 
                 journal_elem = root_f.find(".//Journal/Title")
                 source = journal_elem.text if journal_elem is not None else "Revista Científica"
+                source_clean = source.strip().rstrip('.')
                 
                 year_elem = root_f.find(".//JournalIssue/PubDate/Year")
                 pubdate = year_elem.text[:4] if year_elem is not None else "2026"
@@ -313,11 +329,11 @@ def obtener_datos_estudio(termino):
                     if lastname is not None and lastname.text:
                         primer_autor = f"{lastname.text} et al."
 
-                referencia = f"{primer_autor} {titulo}. {source}. {pubdate}; PMID: {pmid}."
+                referencia = f"{primer_autor} {titulo_clean}. {source_clean}. {pubdate}; PMID: {pmid}."
                 
                 candidatos.append({
                     "pmid": pmid,
-                    "titulo": titulo,
+                    "titulo": titulo_clean,
                     "abstract_completo": abstract_completo,
                     "abstract_dict": abstract_dict,
                     "referencia": referencia
@@ -505,7 +521,7 @@ draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_U
 y_cursor += 24
 y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
-# BLOQUE 4: GLOSARIO INTEGRADO (Formato tipográfico estándar sin recuadro)
+# BLOQUE 4: GLOSARIO INTEGRADO
 if glosario_especifico_dict:
     y_cursor += spacing_bloques
     draw.text((MARGEN_LATERAL, y_cursor), "GLOSARIO DEL ESTUDIO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
