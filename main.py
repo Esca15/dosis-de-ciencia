@@ -55,8 +55,10 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bQoL\b': 'CdV',
     r'\bIntensive Care Unit\b': 'Unidad de Cuidados Intensivos (UCI)',
     r'\bICU\b': 'UCI',
-    r'\bAAE\b': 'EPA',  # Corrección explícita de traducción automática defectuosa (Entrustable Professional Activities)
+    r'\bAAE\b': 'EPA',
     r'\bEW/TTS\b': 'SAT/STT (Sistemas Alerta Temprana)',
+    r'\bVADs?\b': 'DAV (Dispositivo de Asistencia Ventricular)',
+    r'\bDLIs?\b': 'ILT (Infección de la Línea de Transmisión)',
 }
 
 # NIVEL 2: Siglas universales / estadísticas que se quedan tal cual en texto (No van al glosario)
@@ -77,26 +79,28 @@ def aplicar_traducciones_directas(texto):
 
 def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
     """
-    NIVEL 3: Detecta pares (Definición en Inglés -> Sigla) en el abstract original
-    que corresponden a conceptos médicos/educativos específicos del artículo.
+    NIVEL 3 ROBUSTO: Captura siglas y definiciones tanto en mayúsculas como minúsculas,
+    normalizando plurales (VADs -> VAD).
     """
     if not abstract_original_en:
         return {}
     
-    patron_definiciones = r'\b([A-Z][a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
+    # Captura patrones flexibles tipo "ventricular assist devices (VADs)" o "Driveline Infections (DLI)"
+    patron_definiciones = r'\b([a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
     coincidencias = re.findall(patron_definiciones, abstract_original_en)
     
     glosario_especifico = {}
+    translator = GoogleTranslator(source='en', target='es')
     
     for termino_en, sigla in coincidencias:
-        sigla_clean = sigla.strip()
-        termino_en_clean = termino_en.strip()
+        sigla_clean = sigla.strip().rstrip('sS')  # Elimina plurales de la sigla
+        termino_en_clean = termino_en.strip().capitalize()
         
         if sigla_clean in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
             continue
             
         try:
-            def_es = GoogleTranslator(source='en', target='es').translate(termino_en_clean)
+            def_es = translator.translate(termino_en_clean)
         except Exception:
             def_es = termino_en_clean
             
@@ -118,7 +122,6 @@ def traducir_y_adaptar(texto):
     texto_prep = aplicar_traducciones_directas(texto)
     traduccion = ""
     
-    # Intento 1: Traducción completa en bloque con reintentos
     intentos = 5
     for i in range(intentos):
         try:
@@ -129,7 +132,6 @@ def traducir_y_adaptar(texto):
         except Exception:
             time.sleep(1.5 * (i + 1))
 
-    # Intento 2: Si la traducción del bloque completo falló, traducir oración por oración
     if not traduccion or len(traduccion.strip()) == 0:
         oraciones = re.split(r'\.\s+', texto_prep)
         oraciones_traducidas = []
@@ -147,7 +149,6 @@ def traducir_y_adaptar(texto):
             oraciones_traducidas.append(t_oracion if t_oracion else o)
         traduccion = ". ".join(oraciones_traducidas)
 
-    # Corrección de voz pasiva y estilo académico
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -333,17 +334,16 @@ if estudio:
     hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
 
-    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS (CADA BLOQUE FORZADO)
+    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS
     titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
 
-    # REMOVER REPETICIÓN DEL PROBLEMA EN EL HALLAZGO (SI APLICA)
     if problema_texto in hallazgo_texto:
         hallazgo_texto = hallazgo_texto.replace(problema_texto, "").strip()
 
-    # EXTRACCIÓN DEL MICRO-GLOSARIO DINÁMICO (NIVEL 3)
+    # EXTRACCIÓN DEL MICRO-GLOSARIO DINÁMICO (NIVEL 3 ROBUSTO)
     texto_infografia_completo = f"{problema_texto} {hallazgo_texto} {conclusion_texto}"
     glosario_especifico_dict = extraer_siglas_medicas_especificas(abs_full, texto_infografia_completo)
 
