@@ -38,27 +38,29 @@ else:  # Fallback
 # ==========================================
 
 MAPEO_SIGLAS_ES_EN = {
-    "EII": "IBD",
-    "IBD": "EII",
-    "DAV": "VAD",
-    "VAD": "DAV",
-    "ILT": "DLI",
-    "DLI": "ILT",
-    "CVRS": "HRQoL",
-    "HRQoL": "CVRS",
-    "EC": "CD",
-    "CD": "EC"
+    "EII": "IBD", "IBD": "EII",
+    "DAV": "VAD", "VAD": "DAV",
+    "ILT": "DLI", "DLI": "ILT",
+    "CVRS": "HRQoL", "HRQoL": "CVRS",
+    "EC": "CD", "CD": "EC",
+    "SSR": "SRH", "SRH": "SSR"
 }
 
-# Diccionario explícito para acrónimos metodológicos/clínicos conocidos
+# Diccionario explícito para acrónimos de contexto regional, clínico y metodológico
 DICCIONARIO_SIGLAS_ESTANDAR = {
-    "GRADE": "Sistema de Clasificación del Nivel de Evidencia y Fuerza de las Recomendaciones (Grading of Recommendations Assessment, Development and Evaluation)",
-    "PRISMA": "Elementos de Informe Preferidos para Revisiones Sistemáticas y Metaanálisis (Preferred Reporting Items for Systematic Reviews and Meta-Analyses)",
+    "NDIS": "Esquema Nacional de Seguro de Discapacidad de Australia (National Disability Insurance Scheme)",
+    "SSR": "Salud Sexual y Reproductiva (Sexual and Reproductive Health)",
+    "SRH": "Salud Sexual y Reproductiva (Sexual and Reproductive Health)",
+    "GRADE": "Sistema de Clasificación del Nivel de Evidencia (Grading of Recommendations Assessment, Development and Evaluation)",
+    "PRISMA": "Elementos de Informe Preferidos para Revisiones Sistemáticas (Preferred Reporting Items for Systematic Reviews and Meta-Analyses)",
     "STROBE": "Fortalecimiento del Reporte de Estudios Observacionales en Epidemiología (Strengthening the Reporting of Observational Studies in Epidemiology)",
     "CONSORT": "Estándares Consolidados para el Reporte de Ensayos Clínicos (Consolidated Standards of Reporting Trials)"
 }
 
 TRADUCCIONES_DIRECTAS_TEXTO = {
+    r'\bSexual and Reproductive Health\b': 'Salud Sexual y Reproductiva (SSR)',
+    r'\bsexual and reproductive health\b': 'salud sexual y reproductiva (SSR)',
+    r'\bSRH\b': 'SSR',
     r'\bOverall Survival\b': 'Supervivencia Global (SG)',
     r'\boverall survival\b': 'supervivencia global (SG)',
     r'\bOS\b': 'SG',
@@ -75,11 +77,7 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bQoL\b': 'CdV',
     r'\bIntensive Care Unit\b': 'Unidad de Cuidados Intensivos (UCI)',
     r'\bICU\b': 'UCI',
-    r'\bAAE\b': 'EPA',
     r'\bEW/TTS\b': 'SAT/STT (Sistemas Alerta Temprana)',
-    r'\bVADs?\b': 'DAV (Dispositivo de Asistencia Ventricular)',
-    r'\bDLIs?\b': 'ILT (Infección de la Línea de Transmisión)',
-    r'\bIBDs?\b': 'EII (Enfermedad Inflamatoria Intestinal)',
     r'\bClinical Deterioration\b': 'Deterioro Clínico (EC)',
     r'\bclinical deterioration\b': 'deterioro clínico (EC)',
     r'\bCD\b': 'EC'
@@ -101,53 +99,59 @@ def aplicar_traducciones_directas(texto):
     return texto_trad
 
 def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
-    if not abstract_original_en:
-        return {}
-    
-    patron_definiciones = r'\b([a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
-    coincidencias = re.findall(patron_definiciones, abstract_original_en)
-    
     glosario_especifico = {}
     translator = GoogleTranslator(source='en', target='es')
+
+    # 1. Escaneo por patrones estándar "Term (ACRONYM)" en el abstract original
+    if abstract_original_en:
+        patron_definiciones = r'\b([a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
+        coincidencias = re.findall(patron_definiciones, abstract_original_en)
+        
+        for termino_en, sigla in coincidencias:
+            sigla_en = sigla.strip().rstrip('sS')
+            termino_en_clean = termino_en.strip()
+            
+            if sigla_en in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
+                continue
+                
+            sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
+            
+            if sigla_es in DICCIONARIO_SIGLAS_ESTANDAR:
+                glosario_especifico[sigla_es] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_es]
+                continue
+                
+            termino_en_clean = re.sub(r'^(and|or|with|by|for|in|of)\s+', '', termino_en_clean, flags=re.IGNORECASE).capitalize()
+
+            try:
+                def_es = translator.translate(termino_en_clean).capitalize()
+            except Exception:
+                def_es = termino_en_clean
+                
+            glosario_especifico[sigla_es] = f"{def_es} ({termino_en_clean})"
+
+    # 2. Escaneo complementario: Buscar siglas presentes en el TEXTO FINAL traducido
+    siglas_en_texto = set(re.findall(r'\b[A-Z]{2,8}\b', texto_traducido_es))
     
-    for termino_en, sigla in coincidencias:
-        sigla_en = sigla.strip().rstrip('sS')
-        termino_en_clean = termino_en.strip()
-        
-        # 1. Si la sigla es un estándar conocido (GRADE, PRISMA, etc.), usar definición exacta
-        if sigla_en in DICCIONARIO_SIGLAS_ESTANDAR:
-            glosario_especifico[sigla_en] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_en]
-            continue
-
-        # 2. Omitir siglas universales de la lista de exclusión
-        if sigla_en in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
+    for sigla in siglas_en_texto:
+        if sigla in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO:
             continue
             
-        # 3. Limpieza de prefijos huérfanos ("and evaluations", "with...", etc.)
-        termino_en_clean = re.sub(r'^(and|or|with|by|for|in|of)\s+', '', termino_en_clean, flags=re.IGNORECASE).capitalize()
+        # Si la sigla está en nuestro diccionario estandarizado
+        if sigla in DICCIONARIO_SIGLAS_ESTANDAR and sigla not in glosario_especifico:
+            glosario_especifico[sigla] = DICCIONARIO_SIGLAS_ESTANDAR[sigla]
+            
+        # Si existe mapeo inverso (ej: si el texto tiene SRH pero la versión estandarizada es SSR)
+        elif sigla in MAPEO_SIGLAS_ES_EN:
+            sigla_mantenida = MAPEO_SIGLAS_ES_EN[sigla]
+            if sigla_mantenida in DICCIONARIO_SIGLAS_ESTANDAR and sigla_mantenida not in glosario_especifico:
+                glosario_especifico[sigla_mantenida] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_mantenida]
 
-        try:
-            def_es = translator.translate(termino_en_clean).capitalize()
-        except Exception:
-            def_es = termino_en_clean
-        
-        # Traducir la sigla al español si existe en el mapa bidireccional (ej: CD -> EC)
-        sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
-        
-        if sigla_es != sigla_en:
-            entrada_sigla = sigla_es
-        else:
-            entrada_sigla = sigla_en
-            
-        glosario_especifico[entrada_sigla] = f"{def_es} ({termino_en_clean})"
-            
     return glosario_especifico
 
 def limpiar_y_normalizar_simbolos(texto):
     if not texto:
         return ""
     texto = unicodedata.normalize('NFKC', texto)
-    # Limpiar dobles puntos accidentales acumulados
     texto = re.sub(r'\.{2,}', '.', texto)
     return texto.strip()
 
@@ -296,7 +300,7 @@ def obtener_datos_estudio(termino):
                 titulo = titulo_elem.text if titulo_elem is not None and titulo_elem.text else ""
                 titulo = re.sub('<[^<]+?>', '', titulo)
                 
-                # PREVENCIÓN DE DOBLE PUNTO: Eliminar punto final del título si existe
+                # PREVENCIÓN DE DOBLE PUNTO
                 titulo_clean = titulo.strip().rstrip('.')
 
                 abstract_elems = root_f.findall(".//AbstractText")
