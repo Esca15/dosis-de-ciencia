@@ -56,6 +56,7 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bIntensive Care Unit\b': 'Unidad de Cuidados Intensivos (UCI)',
     r'\bICU\b': 'UCI',
     r'\bAAE\b': 'EPA',  # Corrección explícita de traducción automática defectuosa (Entrustable Professional Activities)
+    r'\bEW/TTS\b': 'SAT/STT (Sistemas Alerta Temprana)',
 }
 
 # NIVEL 2: Siglas universales / estadísticas que se quedan tal cual en texto (No van al glosario)
@@ -82,23 +83,20 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
     if not abstract_original_en:
         return {}
     
-    # Captura patrones tipo: "Entrustable Professional Activities (EPAs)" o "Prostate-Specific Antigen (PSA)"
     patron_definiciones = r'\b([A-Z][a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
     coincidencias = re.findall(patron_definiciones, abstract_original_en)
     
     glosario_especifico = {}
-    translator = GoogleTranslator(source='en', target='es')
     
     for termino_en, sigla in coincidencias:
         sigla_clean = sigla.strip()
         termino_en_clean = termino_en.strip()
         
-        # Omitimos métricas generales (Nivel 2) o palabras cortas
         if sigla_clean in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
             continue
             
         try:
-            def_es = translator.translate(termino_en_clean)
+            def_es = GoogleTranslator(source='en', target='es').translate(termino_en_clean)
         except Exception:
             def_es = termino_en_clean
             
@@ -112,29 +110,44 @@ def limpiar_y_normalizar_simbolos(texto):
     texto = unicodedata.normalize('NFKC', texto)
     return texto.strip()
 
-# --- TRADUCCIÓN Y ADAPTACIÓN DE TEXTO ---
+# --- TRADUCCIÓN Y ADAPTACIÓN DE TEXTO ROBUSTA ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
     
     texto_prep = aplicar_traducciones_directas(texto)
+    traduccion = ""
     
-    traduccion = None
-    intentos = 4
+    # Intento 1: Traducción completa en bloque con reintentos
+    intentos = 5
     for i in range(intentos):
         try:
-            res = GoogleTranslator(source='auto', target='es').translate(texto_prep)
-            if res and "Error 500" not in res and "That's an error" not in res:
+            res = GoogleTranslator(source='en', target='es').translate(texto_prep)
+            if res and len(res.strip()) > 0 and "Error 500" not in res and "That's an error" not in res:
                 traduccion = res
                 break
-            else:
-                time.sleep(2)
         except Exception:
-            time.sleep(2)
+            time.sleep(1.5 * (i + 1))
 
+    # Intento 2: Si la traducción del bloque completo falló, traducir oración por oración
     if not traduccion or len(traduccion.strip()) == 0:
-        traduccion = texto_prep
+        oraciones = re.split(r'\.\s+', texto_prep)
+        oraciones_traducidas = []
+        for o in oraciones:
+            if not o.strip():
+                continue
+            t_oracion = ""
+            for k in range(3):
+                try:
+                    t_oracion = GoogleTranslator(source='en', target='es').translate(o)
+                    if t_oracion:
+                        break
+                except Exception:
+                    time.sleep(1)
+            oraciones_traducidas.append(t_oracion if t_oracion else o)
+        traduccion = ". ".join(oraciones_traducidas)
 
+    # Corrección de voz pasiva y estilo académico
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -180,7 +193,8 @@ def extraer_problema_clinico_estructurado(abs_dict, abs_full):
     patrones_contexto = [
         r'\baimed to\b', r'\bthe purpose of\b', r'\bwe evaluated\b', 
         r'\blittle is known\b', r'\bremains unclear\b', r'\bdespite\b',
-        r'\bhowever\b', r'\black of\b', r'\bis a common\b', r'\bto investigate\b'
+        r'\bhowever\b', r'\black of\b', r'\bis a common\b', r'\bto investigate\b',
+        r'\bare crucial\b', r'\bis essential\b'
     ]
     
     for oracion in oraciones[:3]:
@@ -319,7 +333,7 @@ if estudio:
     hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
 
-    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS
+    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS (CADA BLOQUE FORZADO)
     titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
