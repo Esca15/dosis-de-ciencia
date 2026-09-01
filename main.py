@@ -48,6 +48,14 @@ MAPEO_SIGLAS_ES_EN = {
     "HRQoL": "CVRS"
 }
 
+# Diccionario explícito para acrónimos metodológicos/clínicos conocidos
+DICCIONARIO_SIGLAS_ESTANDAR = {
+    "GRADE": "Sistema de Clasificación del Nivel de Evidencia y Fuerza de las Recomendaciones (Grading of Recommendations Assessment, Development and Evaluation)",
+    "PRISMA": "Elementos de Informe Preferidos para Revisiones Sistemáticas y Metaanálisis (Preferred Reporting Items for Systematic Reviews and Meta-Analyses)",
+    "STROBE": "Fortalecimiento del Reporte de Estudios Observacionales en Epidemiología (Strengthening the Reporting of Observational Studies in Epidemiology)",
+    "CONSORT": "Estándares Consolidados para el Reporte de Ensayos Clínicos (Consolidated Standards of Reporting Trials)"
+}
+
 TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bOverall Survival\b': 'Supervivencia Global (SG)',
     r'\boverall survival\b': 'supervivencia global (SG)',
@@ -75,7 +83,7 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
 SIGLAS_UNIVERSALES_OMITIR_GLOSARIO = {
     "OR", "ORS", "HR", "HRS", "RR", "RRS", "CI", "CIS", "IC", "ICS",
     "SD", "SDS", "SE", "SES", "MD", "MDS", "SMD", "SMDS",
-    "ANOVA", "MANOVA", "PCA", "ROC", "AUC", "PRISMA", "STROBE", "CONSORT",
+    "ANOVA", "MANOVA", "PCA", "ROC", "AUC",
     "RCT", "RCTS", "ECA", "ECAS", "P", "PMID", "CAD/CAM", "CBCT"
 }
 
@@ -99,22 +107,27 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
     
     for termino_en, sigla in coincidencias:
         sigla_en = sigla.strip().rstrip('sS')
-        termino_en_clean = termino_en.strip().capitalize()
+        termino_en_clean = termino_en.strip()
         
+        # 1. Si la sigla es un estándar conocido (GRADE, PRISMA, etc.), usar definición exacta
+        if sigla_en in DICCIONARIO_SIGLAS_ESTANDAR:
+            glosario_especifico[sigla_en] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_en]
+            continue
+
+        # 2. Omitir siglas universales de la lista de exclusión
         if sigla_en in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
             continue
             
+        # 3. Limpieza de prefijos huérfanos ("and evaluations", "with...", etc.)
+        termino_en_clean = re.sub(r'^(and|or|with|by|for|in|of)\s+', '', termino_en_clean, flags=re.IGNORECASE).capitalize()
+
         try:
             def_es = translator.translate(termino_en_clean).capitalize()
         except Exception:
             def_es = termino_en_clean
         
         sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
-        
-        if sigla_es != sigla_en:
-            entrada_sigla = f"{sigla_es} / {sigla_en}"
-        else:
-            entrada_sigla = sigla_en
+        entrada_sigla = f"{sigla_es} / {sigla_en}" if sigla_es != sigla_en else sigla_en
             
         glosario_especifico[entrada_sigla] = f"{def_es} ({termino_en_clean})"
             
@@ -492,7 +505,7 @@ draw.text((MARGEN_LATERAL, y_cursor), "CONCLUSIÓN CLÍNICA", fill=COLOR_VERDE_U
 y_cursor += 24
 y_cursor, _ = draw_justified_text(draw, conclusion_texto, MARGEN_LATERAL, y_cursor, ANCHO_UTIL, fuente_cuerpo_estandar, COLOR_TEXTO_OSCURO, line_spacing=5)
 
-# BLOQUE 4: GLOSARIO INTEGRADO (Sin recuadro, mismo estilo gráfico)
+# BLOQUE 4: GLOSARIO INTEGRADO (Formato tipográfico estándar sin recuadro)
 if glosario_especifico_dict:
     y_cursor += spacing_bloques
     draw.text((MARGEN_LATERAL, y_cursor), "GLOSARIO DEL ESTUDIO", fill=COLOR_VERDE_UAEM, font=fuente_subtitulo_sec)
