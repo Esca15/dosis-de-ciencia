@@ -54,12 +54,8 @@ TRADUCCIONES_DIRECTAS_TEXTO = {
     r'\bQuality of Life\b': 'Calidad de Vida (CdV)',
     r'\bQoL\b': 'CdV',
     r'\bIntensive Care Unit\b': 'Unidad de Cuidados Intensivos (UCI)',
-    r'\bintensive care unit\b': 'unidad de cuidados intensivos (UCI)',
     r'\bICU\b': 'UCI',
-    r'\bICUs\b': 'UCIs',
-    r'\bClinical Deterioration\b': 'Deterioro Clínico (EC)',
-    r'\bclinical deterioration\b': 'deterioro clínico (EC)',
-    r'\bCD\b': 'EC'
+    r'\bAAE\b': 'EPA',  # Corrección explícita de traducción automática defectuosa (Entrustable Professional Activities)
 }
 
 # NIVEL 2: Siglas universales / estadísticas que se quedan tal cual en texto (No van al glosario)
@@ -81,12 +77,13 @@ def aplicar_traducciones_directas(texto):
 def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
     """
     NIVEL 3: Detecta pares (Definición en Inglés -> Sigla) en el abstract original
-    que corresponden a conceptos médicos específicos del artículo para armar el Micro-glosario.
+    que corresponden a conceptos médicos/educativos específicos del artículo.
     """
     if not abstract_original_en:
         return {}
     
-    patron_definiciones = r'\b([A-Z][a-zA-Z0-9\-\s]{2,45})\s*\(([A-Z0-9]{2,10})\)'
+    # Captura patrones tipo: "Entrustable Professional Activities (EPAs)" o "Prostate-Specific Antigen (PSA)"
+    patron_definiciones = r'\b([A-Z][a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
     coincidencias = re.findall(patron_definiciones, abstract_original_en)
     
     glosario_especifico = {}
@@ -96,18 +93,16 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
         sigla_clean = sigla.strip()
         termino_en_clean = termino_en.strip()
         
-        # Filtramos métricas del Nivel 2 y falsos positivos cortos
+        # Omitimos métricas generales (Nivel 2) o palabras cortas
         if sigla_clean in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
             continue
             
-        # Solo incluir si la sigla aparece en el texto traducido de la infografía
-        if re.search(r'\b' + re.escape(sigla_clean) + r'\b', texto_traducido_es):
-            try:
-                def_es = translator.translate(termino_en_clean)
-            except Exception:
-                def_es = termino_en_clean
-                
-            glosario_especifico[sigla_clean] = f"{termino_en_clean} — {def_es}"
+        try:
+            def_es = translator.translate(termino_en_clean)
+        except Exception:
+            def_es = termino_en_clean
+            
+        glosario_especifico[sigla_clean] = f"{termino_en_clean} — {def_es}"
             
     return glosario_especifico
 
@@ -122,7 +117,6 @@ def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
     
-    # Pre-traducción de términos directos
     texto_prep = aplicar_traducciones_directas(texto)
     
     traduccion = None
@@ -141,7 +135,6 @@ def traducir_y_adaptar(texto):
     if not traduccion or len(traduccion.strip()) == 0:
         traduccion = texto_prep
 
-    # Ajustes de voz y estilo
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -326,11 +319,15 @@ if estudio:
     hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
 
-    # TRADUCCIÓN GARANTIZADA DEL TÍTULO Y CONTENIDOS
+    # TRADUCCIÓN GARANTIZADA DE CONTENIDOS
     titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
+
+    # REMOVER REPETICIÓN DEL PROBLEMA EN EL HALLAZGO (SI APLICA)
+    if problema_texto in hallazgo_texto:
+        hallazgo_texto = hallazgo_texto.replace(problema_texto, "").strip()
 
     # EXTRACCIÓN DEL MICRO-GLOSARIO DINÁMICO (NIVEL 3)
     texto_infografia_completo = f"{problema_texto} {hallazgo_texto} {conclusion_texto}"
