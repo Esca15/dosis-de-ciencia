@@ -13,7 +13,7 @@ from deep_translator import GoogleTranslator
 import time
 import random
 
-print("1. Configurando parámetros y diccionarios de siglas...")
+print("1. Configurando parámetros y clasificadores de siglas...")
 
 # ==========================================
 # 🔄 1. ROTACIÓN TEMÁTICA Y DÍAS
@@ -34,67 +34,82 @@ else:  # Fallback
     etiqueta_defecto = "Divulgación Científica y Metodología"
 
 # ==========================================
-# 📚 2. DICCIONARIO Y PROCESADOR DE SIGLAS
+# 📚 2. DICCIONARIOS Y REGLAS DE TRADUCCIÓN (SISTEMA DE 3 NIVELES)
 # ==========================================
-DICCIONARIO_SIGLAS_ESTANDAR = {
-    # Educación médica / Evaluación
-    r'\bEPAs\b': 'Actividades Profesionales Confiables (EPA)',
-    r'\bEPA\b': 'Actividades Profesionales Confiables (EPA)',
-    r'\bAAEs\b': 'Actividades Profesionales Confiables (EPA)',
-    r'\bAAE\b': 'Actividades Profesionales Confiables (EPA)',
-    
-    # Bioestadística y Metodología
-    r'\bRCTs\b': 'Ensayos Clínicos Aleatorizados (ECA)',
-    r'\bRCT\b': 'Ensayo Clínico Aleatorizado (ECA)',
-    r'\bORs\b': 'Razones de Momios (OR)',
-    r'\bOR\b': 'Razón de Momios (OR)',
-    r'\bCIs\b': 'Intervalos de Confianza (IC)',
-    r'\bCI\b': 'Intervalo de Confianza (IC)',
-    r'\bHRs\b': 'Razones de Riesgo (HR)',
-    r'\bHR\b': 'Razón de Riesgo (HR)',
-    r'\bRRs\b': 'Riesgos Relativos (RR)',
-    r'\bRR\b': 'Riesgo Relativo (RR)',
-    r'\bSDs\b': 'Desviaciones Estándar (DE)',
-    r'\bSD\b': 'Desviación Estándar (DE)',
-    r'\bSEs\b': 'Errores Estándar (EE)',
-    r'\bSE\b': 'Error Estándar (EE)',
-    r'\bMDs\b': 'Diferencias de Medias (DM)',
-    r'\bMD\b': 'Diferencia de Medias (DM)',
-    r'\bSMDs\b': 'Diferencias de Medias Estandarizadas (DME)',
-    r'\bSMD\b': 'Diferencia de Medias Estandarizada (DME)',
-    r'\bANOVA\b': 'Análisis de Varianza (ANOVA)',
-    r'\bMANOVA\b': 'Análisis Multivariado de Varianza (MANOVA)',
-    r'\bPCA\b': 'Análisis de Componentes Principales (ACP)',
-    r'\bROC\b': 'Curva ROC (Característica Operativa del Receptor)',
-    r'\bAUC\b': 'Área Bajo la Curva (AUC)',
-    r'\bPRISMA\b': 'Declaración PRISMA',
-    r'\bSTROBE\b': 'Guía STROBE',
-    r'\bCONSORT\b': 'Declaración CONSORT',
-    
-    # Odontología y Tecnología
-    r'\bCBCT\b': 'Tomografía Computarizada de Haz Cónico (CBCT)',
-    r'\bCAD/CAM\b': 'Diseño y Fabricación Asistidos por Computadora (CAD/CAM)',
-    r'\bDIS\b': 'Escáner Intraoral Digital (DIS)'
+
+# NIVEL 1: Términos que se traducen DIRECTO en el texto (No van al glosario)
+TRADUCCIONES_DIRECTAS_TEXTO = {
+    r'\bOverall Survival\b': 'Supervivencia Global (SG)',
+    r'\boverall survival\b': 'supervivencia global (SG)',
+    r'\bOS\b': 'SG',
+    r'\bProgression-Free Survival\b': 'Supervivencia Libre de Progresión (SLP)',
+    r'\bprogression-free survival\b': 'supervivencia libre de progresión (SLP)',
+    r'\bPFS\b': 'SLP',
+    r'\bDisease-Free Survival\b': 'Supervivencia Libre de Enfermedad (SLE)',
+    r'\bDFS\b': 'SLE',
+    r'\bAdverse Events\b': 'Eventos Adversos (EA)',
+    r'\badverse events\b': 'eventos adversos (EA)',
+    r'\bAEs\b': 'EAs',
+    r'\bAE\b': 'EA',
+    r'\bQuality of Life\b': 'Calidad de Vida (CdV)',
+    r'\bQoL\b': 'CdV',
+    r'\bIntensive Care Unit\b': 'Unidad de Cuidados Intensivos (UCI)',
+    r'\bintensive care unit\b': 'unidad de cuidados intensivos (UCI)',
+    r'\bICU\b': 'UCI',
+    r'\bICUs\b': 'UCIs',
+    r'\bClinical Deterioration\b': 'Deterioro Clínico (EC)',
+    r'\bclinical deterioration\b': 'deterioro clínico (EC)',
+    r'\bCD\b': 'EC'
 }
 
-def expandir_siglas_del_texto(texto):
-    if not texto:
-        return ""
-    patron_siglas = r'\b([A-Z][a-z0-9\-]+(?:\s+[A-Za-z0-9\-]+){1,5})\s*\(([A-Z0-9]{2,8})\)'
-    definiciones = re.findall(patron_siglas, texto)
-    texto_expandido = texto
-    for termino_completo, sigla in definiciones:
-        patron_sigla_suelta = r'\b' + re.escape(sigla) + r'\b'
-        texto_expandido = re.sub(patron_sigla_suelta, termino_completo, texto_expandido)
-    return texto_expandido
+# NIVEL 2: Siglas universales / estadísticas que se quedan tal cual en texto (No van al glosario)
+SIGLAS_UNIVERSALES_OMITIR_GLOSARIO = {
+    "OR", "ORS", "HR", "HRS", "RR", "RRS", "CI", "CIS", "IC", "ICS",
+    "SD", "SDS", "SE", "SES", "MD", "MDS", "SMD", "SMDS",
+    "ANOVA", "MANOVA", "PCA", "ROC", "AUC", "PRISMA", "STROBE", "CONSORT",
+    "RCT", "RCTS", "ECA", "ECAS", "P", "PMID", "CAD/CAM", "CBCT"
+}
 
-def normalizar_siglas_espanol(texto):
+def aplicar_traducciones_directas(texto):
     if not texto:
         return ""
-    texto_normalizado = texto
-    for patron_sigla, reemplazo_es in DICCIONARIO_SIGLAS_ESTANDAR.items():
-        texto_normalizado = re.sub(patron_sigla, reemplazo_es, texto_normalizado)
-    return texto_normalizado
+    texto_trad = texto
+    for patron, reemplazo in TRADUCCIONES_DIRECTAS_TEXTO.items():
+        texto_trad = re.sub(patron, reemplazo, texto_trad)
+    return texto_trad
+
+def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
+    """
+    NIVEL 3: Detecta pares (Definición en Inglés -> Sigla) en el abstract original
+    que corresponden a conceptos médicos específicos del artículo para armar el Micro-glosario.
+    """
+    if not abstract_original_en:
+        return {}
+    
+    patron_definiciones = r'\b([A-Z][a-zA-Z0-9\-\s]{2,45})\s*\(([A-Z0-9]{2,10})\)'
+    coincidencias = re.findall(patron_definiciones, abstract_original_en)
+    
+    glosario_especifico = {}
+    translator = GoogleTranslator(source='en', target='es')
+    
+    for termino_en, sigla in coincidencias:
+        sigla_clean = sigla.strip()
+        termino_en_clean = termino_en.strip()
+        
+        # Filtramos métricas del Nivel 2 y falsos positivos cortos
+        if sigla_clean in SIGLAS_UNIVERSALES_OMITIR_GLOSARIO or len(termino_en_clean) < 4:
+            continue
+            
+        # Solo incluir si la sigla aparece en el texto traducido de la infografía
+        if re.search(r'\b' + re.escape(sigla_clean) + r'\b', texto_traducido_es):
+            try:
+                def_es = translator.translate(termino_en_clean)
+            except Exception:
+                def_es = termino_en_clean
+                
+            glosario_especifico[sigla_clean] = f"{termino_en_clean} — {def_es}"
+            
+    return glosario_especifico
 
 def limpiar_y_normalizar_simbolos(texto):
     if not texto:
@@ -102,16 +117,19 @@ def limpiar_y_normalizar_simbolos(texto):
     texto = unicodedata.normalize('NFKC', texto)
     return texto.strip()
 
-# --- TRADUCCIÓN Y ADAPTACIÓN ---
+# --- TRADUCCIÓN Y ADAPTACIÓN DE TEXTO ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
+    
+    # Pre-traducción de términos directos
+    texto_prep = aplicar_traducciones_directas(texto)
     
     traduccion = None
     intentos = 4
     for i in range(intentos):
         try:
-            res = GoogleTranslator(source='auto', target='es').translate(texto)
+            res = GoogleTranslator(source='auto', target='es').translate(texto_prep)
             if res and "Error 500" not in res and "That's an error" not in res:
                 traduccion = res
                 break
@@ -121,9 +139,9 @@ def traducir_y_adaptar(texto):
             time.sleep(2)
 
     if not traduccion or len(traduccion.strip()) == 0:
-        traduccion = texto
+        traduccion = texto_prep
 
-    # Corrección de voz activa/pasiva
+    # Ajustes de voz y estilo
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -137,17 +155,7 @@ def traducir_y_adaptar(texto):
     for patron, reemplazo in reemplazos_voz.items():
         traduccion = re.sub(patron, reemplazo, traduccion)
 
-    # Normalización de inconsistencias de traducción específicas
-    reemplazos_terminos = {
-        r'\b[A|a]ctividades de [E|e]ncomienda\b': 'Actividades Profesionales Confiables (EPA)',
-        r'\b[A|a]ctividades [P|p]rofesionales de [C|c]onfianza\b': 'Actividades Profesionales Confiables (EPA)',
-        r'\bAAE\b': 'EPA',
-        r'\bAAEs\b': 'EPAs'
-    }
-    for patron, reemplazo in reemplazos_terminos.items():
-        traduccion = re.sub(patron, reemplazo, traduccion)
-
-    traduccion = normalizar_siglas_espanol(traduccion)
+    traduccion = aplicar_traducciones_directas(traduccion)
     traduccion = limpiar_y_normalizar_simbolos(traduccion)
     traduccion = re.sub(r'[\(\[\{][^\)\}\]]*$', '', traduccion).strip()
     
@@ -156,11 +164,11 @@ def traducir_y_adaptar(texto):
 
     return traduccion
 
-# --- CLASIFICACIÓN DINÁMICA ---
+# --- CLASIFICACIÓN DINÁMICA DE ÁREA ---
 def clasificar_area_tematica(titulo_es, abstract_es, tema_por_defecto):
     texto_completo = f"{titulo_es} {abstract_es}".lower()
     kw_dental = ["dental", "odonto", "caries", "periodont", "endodon", "maxilofac", "salud bucal", "diente", "oral", "fluor"]
-    kw_bioest = ["estadístic", "metaanálisis", "meta-análisis", "ensayo clínico", "modelo", "regresión", "prevalencia", "cohorte", "pronóstico", "predict", "variables"]
+    kw_bioest = ["estadístic", "metaanálisis", "meta-análisis", "ensayo clínico", "modelo", "regresión", "prevalencia", "cohorte", "pronóstico", "predict", "variables", "algoritmo", "automatiz"]
     
     if any(k in texto_completo for k in kw_dental):
         return "Salud y Odontología Basada en Evidencia"
@@ -300,32 +308,33 @@ estudio = obtener_datos_estudio(termino_busqueda)
 if estudio:
     ref_vancouver = limpiar_y_normalizar_simbolos(estudio["referencia"])
     abs_dict = estudio["abstract_dict"]
-    abs_full = expandir_siglas_del_texto(estudio["abstract_completo"])
+    abs_full = estudio["abstract_completo"]
     
     prob_text = extraer_problema_clinico_estructurado(abs_dict, abs_full)
     hall_text = abs_dict.get("RESULTS", abs_dict.get("FINDINGS", ""))
     conc_text = abs_dict.get("CONCLUSIONS", abs_dict.get("CONCLUSION", ""))
 
-    prob_text = expandir_siglas_del_texto(prob_text)
-    
     if not hall_text:
         oraciones_todas = [o.strip() for o in re.split(r'\.\s+', abs_full) if len(o.strip()) > 15]
         hall_text = ". ".join(oraciones_todas[1:-1]) if len(oraciones_todas) >= 3 else abs_full
-    hall_text = expandir_siglas_del_texto(hall_text)
 
     if not conc_text:
         oraciones_todas = [o.strip() for o in re.split(r'\.\s+', abs_full) if len(o.strip()) > 15]
         conc_text = oraciones_todas[-1] if len(oraciones_todas) > 1 else abs_full
-    conc_text = expandir_siglas_del_texto(conc_text)
 
     prob_clean = obtener_oraciones_completas(prob_text, max_caracteres=350)
     hall_clean = obtener_oraciones_completas(hall_text, max_caracteres=1200)
     conc_clean = obtener_oraciones_completas(conc_text, max_caracteres=300)
 
+    # TRADUCCIÓN GARANTIZADA DEL TÍTULO Y CONTENIDOS
     titulo_estudio_es = traducir_y_adaptar(estudio["titulo"])
     problema_texto = traducir_y_adaptar(prob_clean)
     hallazgo_texto = traducir_y_adaptar(hall_clean)
     conclusion_texto = traducir_y_adaptar(conc_clean)
+
+    # EXTRACCIÓN DEL MICRO-GLOSARIO DINÁMICO (NIVEL 3)
+    texto_infografia_completo = f"{problema_texto} {hallazgo_texto} {conclusion_texto}"
+    glosario_especifico_dict = extraer_siglas_medicas_especificas(abs_full, texto_infografia_completo)
 
     etiqueta_tema = clasificar_area_tematica(titulo_estudio_es, hallazgo_texto, etiqueta_defecto)
 
@@ -335,6 +344,7 @@ else:
     problema_texto = "Existe una alta heterogeneidad en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
+    glosario_especifico_dict = {}
     etiqueta_tema = etiqueta_defecto
 
 # ==========================================
@@ -486,13 +496,17 @@ nombre_pie = "Dr. en C. S. Josué R. Bermeo E."
 draw.text((ANCHO - MARGEN_LATERAL - draw.textlength(nombre_pie, font=fuente_pie), ALTO - 32), nombre_pie, fill="#FFFFFF", font=fuente_pie)
 
 img.save("main.png")
-print("Infografía renderizada correctamente con estilo editorial estandarizado.")
+print("Infografía renderizada correctamente.")
 
 # ==========================================
-# ✉️ 5. ENVÍO POR CORREO DE ALERTA
+# ✉️ 5. CONSTRUCCIÓN DE COPY CON MICRO-GLOSARIO Y ENVÍO DE CORREO
 # ==========================================
-remitente = os.environ.get("CORREO_DESTINO")
-contrasena = os.environ.get("CONTRASENA_APP")
+
+bloque_glosario = ""
+if glosario_especifico_dict:
+    bloque_glosario = "\n📌 GLOSARIO DEL ESTUDIO:\n"
+    for sigla, def_completa in glosario_especifico_dict.items():
+        bloque_glosario += f"• {sigla}: {def_completa}\n"
 
 copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 
@@ -507,12 +521,15 @@ copy_redes = f"""🚨 ¡Nueva #DosisDeCiencia sobre {etiqueta_tema}! 🧬
 
 👩‍⚕️ CONCLUSIÓN CLÍNICA:
 {conclusion_texto}
-
+{bloque_glosario}
 📚 Referencia científica (PubMed): 
 {ref_vancouver}
 
 #Ciencia #Investigación #UAEMex #Bioestadística #SaludBasadaEnEvidencia #Odontología
 """
+
+remitente = os.environ.get("CORREO_DESTINO")
+contrasena = os.environ.get("CONTRASENA_APP")
 
 msg = EmailMessage()
 msg['Subject'] = f"🧬 Dosis de Ciencia: {etiqueta_tema}"
