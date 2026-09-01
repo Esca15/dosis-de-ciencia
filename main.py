@@ -37,6 +37,13 @@ else:  # Fallback
 # 📚 2. DICCIONARIO Y PROCESADOR DE SIGLAS
 # ==========================================
 DICCIONARIO_SIGLAS_ESTANDAR = {
+    # Educación médica / Evaluación
+    r'\bEPAs\b': 'Actividades Profesionales Confiables (EPA)',
+    r'\bEPA\b': 'Actividades Profesionales Confiables (EPA)',
+    r'\bAAEs\b': 'Actividades Profesionales Confiables (EPA)',
+    r'\bAAE\b': 'Actividades Profesionales Confiables (EPA)',
+    
+    # Bioestadística y Metodología
     r'\bRCTs\b': 'Ensayos Clínicos Aleatorizados (ECA)',
     r'\bRCT\b': 'Ensayo Clínico Aleatorizado (ECA)',
     r'\bORs\b': 'Razones de Momios (OR)',
@@ -63,6 +70,8 @@ DICCIONARIO_SIGLAS_ESTANDAR = {
     r'\bPRISMA\b': 'Declaración PRISMA',
     r'\bSTROBE\b': 'Guía STROBE',
     r'\bCONSORT\b': 'Declaración CONSORT',
+    
+    # Odontología y Tecnología
     r'\bCBCT\b': 'Tomografía Computarizada de Haz Cónico (CBCT)',
     r'\bCAD/CAM\b': 'Diseño y Fabricación Asistidos por Computadora (CAD/CAM)',
     r'\bDIS\b': 'Escáner Intraoral Digital (DIS)'
@@ -114,6 +123,7 @@ def traducir_y_adaptar(texto):
     if not traduccion or len(traduccion.strip()) == 0:
         traduccion = texto
 
+    # Corrección de voz activa/pasiva
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
@@ -125,6 +135,16 @@ def traducir_y_adaptar(texto):
         r'\b[C|c]oncluimos\b': 'La evidencia concluye'
     }
     for patron, reemplazo in reemplazos_voz.items():
+        traduccion = re.sub(patron, reemplazo, traduccion)
+
+    # Normalización de inconsistencias de traducción específicas
+    reemplazos_terminos = {
+        r'\b[A|a]ctividades de [E|e]ncomienda\b': 'Actividades Profesionales Confiables (EPA)',
+        r'\b[A|a]ctividades [P|p]rofesionales de [C|c]onfianza\b': 'Actividades Profesionales Confiables (EPA)',
+        r'\bAAE\b': 'EPA',
+        r'\bAAEs\b': 'EPAs'
+    }
+    for patron, reemplazo in reemplazos_terminos.items():
         traduccion = re.sub(patron, reemplazo, traduccion)
 
     traduccion = normalizar_siglas_espanol(traduccion)
