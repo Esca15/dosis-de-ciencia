@@ -47,7 +47,6 @@ MAPEO_SIGLAS_ES_EN = {
     "TNF": "FND", "FND": "TNF"
 }
 
-# Diccionario explícito para acrónimos de contexto regional, clínico y metodológico
 DICCIONARIO_SIGLAS_ESTANDAR = {
     "NDIS": "Esquema Nacional de Seguro de Discapacidad de Australia (National Disability Insurance Scheme)",
     "SSR": "Salud Sexual y Reproductiva (Sexual and Reproductive Health)",
@@ -106,9 +105,7 @@ def aplicar_traducciones_directas(texto):
 
 def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es):
     glosario_especifico = {}
-    translator = GoogleTranslator(source='en', target='es')
 
-    # 1. Escaneo por patrones estándar "Term (ACRONYM)" en el abstract original
     if abstract_original_en:
         patron_definiciones = r'\b([a-zA-Z0-9\-\s]{2,50})\s*\(([A-Z0-9]{2,10})s?\)'
         coincidencias = re.findall(patron_definiciones, abstract_original_en)
@@ -122,7 +119,6 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
                 
             sigla_es = MAPEO_SIGLAS_ES_EN.get(sigla_en, sigla_en)
             
-            # Si ya la tenemos estandarizada en el diccionario maestro, usarla prioritariamente
             if sigla_es in DICCIONARIO_SIGLAS_ESTANDAR:
                 glosario_especifico[sigla_es] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_es]
                 continue
@@ -130,7 +126,6 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
                 glosario_especifico[sigla_en] = DICCIONARIO_SIGLAS_ESTANDAR[sigla_en]
                 continue
 
-            # LIMPIEZA DE PALABRAS BASURA / FRAGMENTOS PREVIOS (Evita errores tipo "Moment in...")
             patron_stop_words = r'^(at\s+that\s+moment\s+in|moment\s+in|patients?\s+with|changes?\s+in|rate\s+of|levels?\s+of|effects?\s+of|association\s+of|and|or|with|by|for|in|of|to|a|an|the)\s+'
             termino_en_clean = re.sub(patron_stop_words, '', termino_en_clean, flags=re.IGNORECASE).strip().capitalize()
 
@@ -138,17 +133,15 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
                 continue
 
             try:
-                def_es = translator.translate(termino_en_clean).capitalize()
+                def_es = GoogleTranslator(source='en', target='es').translate(termino_en_clean).capitalize()
             except Exception:
                 def_es = termino_en_clean
                 
-            # Evitar redundancia si el traductor devolvió exactamente la misma cadena en inglés
             if def_es.lower() == termino_en_clean.lower():
                 glosario_especifico[sigla_es] = f"{def_es}"
             else:
                 glosario_especifico[sigla_es] = f"{def_es} ({termino_en_clean})"
 
-    # 2. Escaneo complementario: Buscar siglas presentes en el TEXTO FINAL traducido
     siglas_en_texto = set(re.findall(r'\b[A-Z]{2,8}\b', texto_traducido_es))
     
     for sigla in siglas_en_texto:
@@ -169,9 +162,11 @@ def limpiar_y_normalizar_simbolos(texto):
     if not texto:
         return ""
     texto = unicodedata.normalize('NFKC', texto)
+    texto = texto.replace('\xa0', ' ')
     texto = re.sub(r'\.{2,}', '.', texto)
     return texto.strip()
 
+# --- TRADUCCIÓN ROBUSTA OPTIMIZADA CON TIMEOUT Y FALLBACK RÁPIDO ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
@@ -179,7 +174,8 @@ def traducir_y_adaptar(texto):
     texto_prep = aplicar_traducciones_directas(texto)
     traduccion = ""
     
-    intentos = 5
+    # 1. Intento por bloques con tiempo de espera máximo reducido
+    intentos = 3
     for i in range(intentos):
         try:
             res = GoogleTranslator(source='en', target='es').translate(texto_prep)
@@ -187,25 +183,25 @@ def traducir_y_adaptar(texto):
                 traduccion = res
                 break
         except Exception:
-            time.sleep(1.5 * (i + 1))
+            time.sleep(0.5 * (i + 1))
 
+    # 2. Si falla por bloque completo, traducir por oraciones de forma ágil
     if not traduccion or len(traduccion.strip()) == 0:
-        oraciones = re.split(r'\.\s+', texto_prep)
+        oraciones = [o.strip() for o in re.split(r'\.\s+', texto_prep) if o.strip()]
         oraciones_traducidas = []
         for o in oraciones:
-            if not o.strip():
-                continue
             t_oracion = ""
-            for k in range(3):
+            for k in range(2):
                 try:
                     t_oracion = GoogleTranslator(source='en', target='es').translate(o)
                     if t_oracion:
                         break
                 except Exception:
-                    time.sleep(1)
+                    time.sleep(0.3)
             oraciones_traducidas.append(t_oracion if t_oracion else o)
         traduccion = ". ".join(oraciones_traducidas)
 
+    # Adaptación de voz pasiva a estilo académico en español
     reemplazos_voz = {
         r'\b[I|i]ntentamos\b': 'El estudio buscó',
         r'\b[B|b]uscamos\b': 'El análisis buscó',
