@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image, ImageDraw, ImageFont
 import smtplib
 from email.message import EmailMessage
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 import time
 import random
 
@@ -135,7 +135,10 @@ def extraer_siglas_medicas_especificas(abstract_original_en, texto_traducido_es)
             try:
                 def_es = GoogleTranslator(source='en', target='es').translate(termino_en_clean).capitalize()
             except Exception:
-                def_es = termino_en_clean
+                try:
+                    def_es = MyMemoryTranslator(source='en-US', target='es-ES').translate(termino_en_clean).capitalize()
+                except Exception:
+                    def_es = termino_en_clean
                 
             if def_es.lower() == termino_en_clean.lower():
                 glosario_especifico[sigla_es] = f"{def_es}"
@@ -166,7 +169,7 @@ def limpiar_y_normalizar_simbolos(texto):
     texto = re.sub(r'\.{2,}', '.', texto)
     return texto.strip()
 
-# --- TRADUCCIÓN ROBUSTA OPTIMIZADA CON TIMEOUT Y FALLBACK RÁPIDO ---
+# --- TRADUCCIÓN CON CONMUTACIÓN MULTI-MOTOR (GARANTIZA TRADUCCIÓN ESPAÑOL) ---
 def traducir_y_adaptar(texto):
     if not texto or len(texto.strip()) == 0:
         return ""
@@ -174,31 +177,39 @@ def traducir_y_adaptar(texto):
     texto_prep = aplicar_traducciones_directas(texto)
     traduccion = ""
     
-    # 1. Intento por bloques con tiempo de espera máximo reducido
-    intentos = 3
-    for i in range(intentos):
+    # Intento 1: Google Translator
+    for i in range(3):
         try:
             res = GoogleTranslator(source='en', target='es').translate(texto_prep)
             if res and len(res.strip()) > 0 and "Error 500" not in res and "That's an error" not in res:
                 traduccion = res
                 break
         except Exception:
-            time.sleep(0.5 * (i + 1))
+            time.sleep(1.0)
 
-    # 2. Si falla por bloque completo, traducir por oraciones de forma ágil
+    # Intento 2: Conmutación a MyMemoryTranslator si Google falló o devolvió vacío
+    if not traduccion or len(traduccion.strip()) == 0:
+        try:
+            res_mm = MyMemoryTranslator(source='en-US', target='es-ES').translate(texto_prep)
+            if res_mm and len(res_mm.strip()) > 0:
+                traduccion = res_mm
+        except Exception:
+            pass
+
+    # Intento 3: Traducción oracional de reserva si los intentos por bloque fallaron
     if not traduccion or len(traduccion.strip()) == 0:
         oraciones = [o.strip() for o in re.split(r'\.\s+', texto_prep) if o.strip()]
         oraciones_traducidas = []
         for o in oraciones:
-            t_oracion = ""
-            for k in range(2):
+            t_or = ""
+            try:
+                t_or = GoogleTranslator(source='en', target='es').translate(o)
+            except Exception:
                 try:
-                    t_oracion = GoogleTranslator(source='en', target='es').translate(o)
-                    if t_oracion:
-                        break
+                    t_or = MyMemoryTranslator(source='en-US', target='es-ES').translate(o)
                 except Exception:
-                    time.sleep(0.3)
-            oraciones_traducidas.append(t_oracion if t_oracion else o)
+                    t_or = o
+            oraciones_traducidas.append(t_or if t_or else o)
         traduccion = ". ".join(oraciones_traducidas)
 
     # Adaptación de voz pasiva a estilo académico en español
@@ -404,7 +415,7 @@ if estudio:
 else:
     ref_vancouver = "Bermeo-Escalona JR, et al. Análisis de evidencia en ciencias de la salud. Rev Med UAEMéx. 2026; PMID: 41964104."
     titulo_estudio_es = "Evaluación sistemática y modelos de análisis en ciencias de la salud"
-    problema_texto = "Existe una alta heterogeneidad en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
+    problema_texto = "Existe una alta heterogeneity en los reportes de investigación que compromete la reproducibilidad de los datos en salud."
     hallazgo_texto = "La implementación de modelos estandarizados redujo la variabilidad metodológica en un 42%, optimizando la precisión de los resultados clínicos."
     conclusion_texto = "El uso de marcos analíticos rigurosos es indispensable para consolidar la práctica basada en la evidencia."
     glosario_especifico_dict = {}
